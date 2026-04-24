@@ -10,7 +10,7 @@ AI工坊平台从零开始，经历骨架搭建、核心数据录入与关联、
 - Integer phases (1, 2, 3, 4): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 1: 项目骨架与环境验证** - 前后端联调空项目可运行，开发环境与部署验证完毕
+- [x] **Phase 1: 项目骨架与环境验证** - 前后端联调空项目可运行，开发环境与部署验证完毕 *(Completed 2026-04-24)*
 - [ ] **Phase 2: 核心数据录入与关联** - 用户可录入预研项目和客户需求，按标签分类，手动关联需求与项目
 - [ ] **Phase 3: 匹配可视化与汇总面板** - 用户可在汇总面板查看关键统计和匹配覆盖率可视化
 - [ ] **Phase 4: 协作记录与详情完善** - 用户可在详情页查看完整信息和关联列表，添加和查看评论
@@ -29,8 +29,8 @@ AI工坊平台从零开始，经历骨架搭建、核心数据录入与关联、
 **Plans**: 2
 
 Plans:
-- [ ] 01-01: 后端项目初始化（FastAPI + SQLModel + SQLite + uv）
-- [ ] 01-02: 前端项目初始化与前后端联调验证（React + Vite + Ant Design + proxy）
+- [x] 01-01: 后端项目初始化（FastAPI + SQLModel + SQLite + uv）
+- [x] 01-02: 前端项目初始化与前后端联调验证（React + Vite + Ant Design + proxy）
 
 ### Phase 2: 核心数据录入与关联
 **Goal**: 用户可以录入预研项目和客户需求，按行业标签分类，手动关联需求与项目，在列表中查看所有数据
@@ -91,7 +91,7 @@ Phase 3 and Phase 4 both depend on Phase 2 but can be planned sequentially (3 be
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. 项目骨架与环境验证 | 0/2 | Not started | - |
+| 1. 项目骨架与环境验证 | 2/2 | Complete | 2026-04-24 |
 | 2. 核心数据录入与关联 | 0/3 | Not started | - |
 | 3. 匹配可视化与汇总面板 | 0/2 | Not started | - |
 | 4. 协作记录与详情完善 | 0/2 | Not started | - |
