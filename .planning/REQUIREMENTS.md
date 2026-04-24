@@ -81,29 +81,29 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROJ-01 | — | Pending |
-| PROJ-02 | — | Pending |
-| PROJ-03 | — | Pending |
-| PROJ-04 | — | Pending |
-| REQM-01 | — | Pending |
-| REQM-02 | — | Pending |
-| REQM-03 | — | Pending |
-| MATCH-01 | — | Pending |
-| MATCH-02 | — | Pending |
-| MATCH-03 | — | Pending |
-| MATCH-04 | — | Pending |
-| TAG-01 | — | Pending |
-| TAG-02 | — | Pending |
-| COLLAB-01 | — | Pending |
-| COLLAB-02 | — | Pending |
-| DASH-01 | — | Pending |
-| DASH-02 | — | Pending |
+| PROJ-01 | Phase 2 | Pending |
+| PROJ-02 | Phase 2 | Pending |
+| PROJ-03 | Phase 2 | Pending |
+| PROJ-04 | Phase 4 | Pending |
+| REQM-01 | Phase 2 | Pending |
+| REQM-02 | Phase 2 | Pending |
+| REQM-03 | Phase 4 | Pending |
+| MATCH-01 | Phase 2 | Pending |
+| MATCH-02 | Phase 2 | Pending |
+| MATCH-03 | Phase 3 | Pending |
+| MATCH-04 | Phase 3 | Pending |
+| TAG-01 | Phase 2 | Pending |
+| TAG-02 | Phase 2 | Pending |
+| COLLAB-01 | Phase 4 | Pending |
+| COLLAB-02 | Phase 4 | Pending |
+| DASH-01 | Phase 3 | Pending |
+| DASH-02 | Phase 3 | Pending |
 
 **Coverage:**
 - v1 requirements: 17 total
-- Mapped to phases: 0
-- Unmapped: 17 ⚠️
+- Mapped to phases: 17
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-24*
-*Last updated: 2026-04-24 after initial definition*
+*Last updated: 2026-04-24 after roadmap creation (traceability mapped)*
