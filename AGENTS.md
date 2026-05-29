@@ -103,8 +103,33 @@ action_learning/
 
 ## git 配置
 
-- Schneider 目标地址：不设置 proxy
-- 其他项目：设置 `http.proxy http://10.190.254.21:80`
+### 远程仓库
+- **Origin**: `https://github.schneider-electric.com/SESA783337/action_learning.git`
+
+### Proxy 规则
+- **Schneider 内部地址**（`github.schneider-electric.com`）：**禁止使用任何 proxy**
+  - git 推送/拉取时必须使用 `git -c http.proxy="" -c https.proxy=""` 或确保环境变量中无 proxy
+  - 系统环境变量 `HTTP_PROXY` / `HTTPS_PROXY` 对 Schneider 地址无效，需显式覆盖
+- **其他项目**：设置 `http.proxy http://10.190.254.21:80`
+
+### 推送命令参考
+```bash
+# 推送到 Schneider GitHub（必须禁用 proxy）
+git -c http.proxy="" -c https.proxy="" push origin master
+```
+
+## PPT / 演示文稿规范
+
+### 公司品牌模板（默认）
+当用户使用 `/html-ppt` skill 或要求制作 PPT/幻灯片/演讲稿时，**默认使用公司品牌模板**：
+
+- **主题**: `advancing-energy`（施耐德 Advancing Energy Tech 品牌色）
+- **Layout 前缀**: `ae-` 开头的模板优先（`ae-cover`, `ae-toc`, `ae-content`, `ae-section`, `ae-thanks`）
+- **品牌色**: 主色 `#0A2F24`（深绿）、辅色 `#3DCD58`（亮绿）、背景 `#FAFAFA`
+- **字体**: Poppins + 微软雅黑 + Noto Sans SC
+- **位置**: `.agents/skills/html-ppt/assets/themes/advancing-energy.css`
+
+除非用户明确要求其他风格（如"小红书风"、"赛博朋克"），否则一律使用公司模板。
 
 ## 工作流程
 
