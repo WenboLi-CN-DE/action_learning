@@ -1,12 +1,12 @@
 import { BrowserRouter, Routes, Route } from 'react-router'
-import DemoPage from './pages/DemoPage'
+import WorkbenchPage from './pages/WorkbenchPage'
 import './App.css'
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<DemoPage />} />
+        <Route path="/" element={<WorkbenchPage />} />
       </Routes>
     </BrowserRouter>
   )

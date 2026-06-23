@@ -1,0 +1,13 @@
+.codegraph/
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+database.db
+
+# Frontend
+node_modules/
+dist/

@@ -9,38 +9,38 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### 项目管理
 
-- [ ] **PROJ-01**: 用户可以创建预研项目（名称、描述、负责人、行业标签、状态）
-- [ ] **PROJ-02**: 用户可以编辑预研项目信息（更新描述、状态、进度等）
-- [ ] **PROJ-03**: 用户可以在项目状态面板查看所有预研项目列表及当前状态（预研/进行中/已完成/搁置）
-- [ ] **PROJ-04**: 用户可以在项目详情页查看项目名称、描述、负责人、进度、关联的需求列表
+- [x] **PROJ-01**: 用户可以创建预研项目（名称、描述、负责人、行业标签、状态）
+- [x] **PROJ-02**: 用户可以编辑预研项目信息（更新描述、状态、进度等）
+- [x] **PROJ-03**: 用户可以在项目状态面板查看所有预研项目列表及当前状态（预研/进行中/已完成/搁置）
+- [x] **PROJ-04**: 用户可以在项目详情页查看项目名称、描述、负责人、进度、关联的需求列表
 
 ### 需求管理
 
-- [ ] **REQM-01**: 用户（销售/咨询）可以提交客户需求（需求描述、客户信息、紧急程度、行业标签）
-- [ ] **REQM-02**: 用户可以在需求列表查看所有客户需求及状态（待评估/已评估/已匹配/已搁置）
-- [ ] **REQM-03**: 用户可以在需求详情页查看需求描述、客户信息、紧急程度、关联的项目列表
+- [x] **REQM-01**: 用户（销售/咨询）可以提交客户需求（需求描述、客户信息、紧急程度、行业标签）
+- [x] **REQM-02**: 用户可以在需求列表查看所有客户需求及状态（待评估/已评估/已匹配/已搁置）
+- [x] **REQM-03**: 用户可以在需求详情页查看需求描述、客户信息、紧急程度、关联的项目列表
 
 ### 需求-项目匹配
 
-- [ ] **MATCH-01**: 用户可以手动将需求关联到预研项目
-- [ ] **MATCH-02**: 用户可以为每个关联标注覆盖状态（已覆盖/部分覆盖/未覆盖）
-- [ ] **MATCH-03**: 用户可以在匹配度可视化面板查看整体匹配覆盖率统计（百分比、图表）
-- [ ] **MATCH-04**: 用户可以按行业/业务线查看该领域的匹配覆盖率
+- [x] **MATCH-01**: 用户可以手动将需求关联到预研项目
+- [x] **MATCH-02**: 用户可以为每个关联标注覆盖状态（已覆盖/部分覆盖/未覆盖）
+- [x] **MATCH-03**: 用户可以在匹配度可视化面板查看整体匹配覆盖率统计（百分比、图表）
+- [x] **MATCH-04**: 用户可以按行业/业务线查看该领域的匹配覆盖率
 
 ### 标签分类
 
-- [ ] **TAG-01**: 系统管理员可以定义行业/业务线标签（数据中心、水处理、工业自动化等）
-- [ ] **TAG-02**: 用户可以按行业/业务线标签筛选项目列表和需求列表
+- [x] **TAG-01**: 系统管理员可以定义行业/业务线标签（数据中心、水处理、工业自动化等）
+- [x] **TAG-02**: 用户可以按行业/业务线标签筛选项目列表和需求列表
 
 ### 协作记录
 
-- [ ] **COLLAB-01**: 用户可以对项目或需求添加文字评论/讨论
-- [ ] **COLLAB-02**: 用户可以查看项目或需求下的所有评论历史
+- [x] **COLLAB-01**: 用户可以对项目或需求添加文字评论/讨论
+- [x] **COLLAB-02**: 用户可以查看项目或需求下的所有评论历史
 
 ### 汇总面板
 
-- [ ] **DASH-01**: 用户可以在汇总面板上同时查看项目数量、需求数量、匹配覆盖率等关键统计
-- [ ] **DASH-02**: 用户可以在汇总面板上快速切换行业/业务线视图
+- [x] **DASH-01**: 用户可以在汇总面板上同时查看项目数量、需求数量、匹配覆盖率等关键统计
+- [x] **DASH-02**: 用户可以在汇总面板上快速切换行业/业务线视图
 
 ## v2 Requirements
 
@@ -81,23 +81,23 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROJ-01 | Phase 2 | Pending |
-| PROJ-02 | Phase 2 | Pending |
-| PROJ-03 | Phase 2 | Pending |
-| PROJ-04 | Phase 4 | Pending |
-| REQM-01 | Phase 2 | Pending |
-| REQM-02 | Phase 2 | Pending |
-| REQM-03 | Phase 4 | Pending |
-| MATCH-01 | Phase 2 | Pending |
-| MATCH-02 | Phase 2 | Pending |
-| MATCH-03 | Phase 3 | Pending |
-| MATCH-04 | Phase 3 | Pending |
-| TAG-01 | Phase 2 | Pending |
-| TAG-02 | Phase 2 | Pending |
-| COLLAB-01 | Phase 4 | Pending |
-| COLLAB-02 | Phase 4 | Pending |
-| DASH-01 | Phase 3 | Pending |
-| DASH-02 | Phase 3 | Pending |
+| PROJ-01 | Phase 2 | Complete |
+| PROJ-02 | Phase 2 | Complete |
+| PROJ-03 | Phase 2 | Complete |
+| PROJ-04 | Phase 4 | Complete |
+| REQM-01 | Phase 2 | Complete |
+| REQM-02 | Phase 2 | Complete |
+| REQM-03 | Phase 4 | Complete |
+| MATCH-01 | Phase 2 | Complete |
+| MATCH-02 | Phase 2 | Complete |
+| MATCH-03 | Phase 3 | Complete |
+| MATCH-04 | Phase 3 | Complete |
+| TAG-01 | Phase 2 | Complete |
+| TAG-02 | Phase 2 | Complete |
+| COLLAB-01 | Phase 4 | Complete |
+| COLLAB-02 | Phase 4 | Complete |
+| DASH-01 | Phase 3 | Complete |
+| DASH-02 | Phase 3 | Complete |
 
 **Coverage:**
 - v1 requirements: 17 total
@@ -106,4 +106,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-04-24*
-*Last updated: 2026-04-24 after roadmap creation (traceability mapped)*
+*Last updated: 2026-06-23 after v1 completion*

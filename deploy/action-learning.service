@@ -1,0 +1,15 @@
+[Unit]
+Description=AI Workshop Backend
+After=network.target
+
+[Service]
+Type=simple
+User=wenbo
+WorkingDirectory=/opt/action_learning/backend
+ExecStart=/usr/bin/env uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

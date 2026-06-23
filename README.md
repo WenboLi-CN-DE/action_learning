@@ -21,7 +21,7 @@
 | 前端 | React 19 + Vite + TypeScript + Ant Design 6 |
 | 状态管理 | Zustand |
 | 环境管理 | uv (Python) / npm (Node.js) |
-| 部署 | Docker Compose |
+| 部署 | Nginx + systemd（MVP） |
 
 ## 项目结构
 
@@ -75,6 +75,50 @@ npm run dev                # 启动开发服务器
 ```
 
 访问：http://localhost:5173
+
+### 一键启动
+
+Windows PowerShell：
+
+```powershell
+.\scripts\dev.ps1
+```
+
+macOS / Linux：
+
+```bash
+./scripts/dev.sh
+```
+
+默认端口：
+
+- 前端：http://127.0.0.1:5173
+- 后端：http://127.0.0.1:8000/docs
+
+如果端口被占用：
+
+```powershell
+.\scripts\dev.ps1 -BackendPort 8001 -FrontendPort 5174
+```
+
+```bash
+./scripts/dev.sh --backend-port 8001 --frontend-port 5174
+```
+
+### Ubuntu 服务器部署
+
+推荐使用 Nginx 对外提供单入口，systemd 托管后端服务：
+
+```bash
+sudo env APP_DIR=/opt/action_learning SERVICE_USER=wenbo bash scripts/deploy-ubuntu.sh
+```
+
+部署模板：
+
+- `deploy/action-learning.service`
+- `deploy/nginx.conf`
+
+详细说明见 `docs/deployment-notes.md`。
 
 ## 核心功能模块
 

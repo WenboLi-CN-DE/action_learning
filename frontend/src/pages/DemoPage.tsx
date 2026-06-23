@@ -8,7 +8,7 @@ interface DemoItem {
   id: number
   name: string
   description: string | null
-  created_at: string
+  created_at?: string
 }
 
 interface HealthStatus {
