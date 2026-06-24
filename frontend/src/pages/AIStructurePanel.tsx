@@ -5,6 +5,72 @@ import type { LLMStructureResult } from '../types'
 const { Text, Title } = Typography
 const { TextArea } = Input
 
+const fieldLabels: Record<string, string> = {
+  name: '能力名称',
+  title: '需求标题',
+  owner: '负责人',
+  status: '状态',
+  customer: '客户名称',
+  contact: '联系人',
+  urgency: '紧急度',
+  description: '描述',
+  business_line: '行业/业务线',
+  industry: '行业/业务线',
+  business_scenario: '业务场景',
+  scenario: '业务场景',
+  pain_points: '当前痛点',
+  pain_point: '当前痛点',
+  expected_capability: '期望能力',
+  timeline_or_stage: '时间节点/阶段',
+  current_solution: '现有方案',
+  expected_value: '预期价值',
+  core_capability: '核心能力',
+  maturity: '成熟度',
+  deliverable_form: '可交付形式',
+  matchable_requirement_types: '可匹配需求类型',
+  constraints: '限制条件',
+  tag_ids: '标签',
+}
+
+const fieldOrder = [
+  'name',
+  'title',
+  'customer',
+  'contact',
+  'owner',
+  'status',
+  'urgency',
+  'description',
+  'business_line',
+  'business_scenario',
+  'pain_points',
+  'expected_capability',
+  'timeline_or_stage',
+  'current_solution',
+  'expected_value',
+  'core_capability',
+  'maturity',
+  'deliverable_form',
+  'matchable_requirement_types',
+  'constraints',
+]
+
+function labelOfField(field: string) {
+  return fieldLabels[field] ?? field
+}
+
+function buildDisplayFields(fields: LLMStructureResult['fields']) {
+  const entries = Object.entries(fields).filter(([, value]) => value)
+  return entries.sort(([left], [right]) => {
+    const leftIndex = fieldOrder.indexOf(left)
+    const rightIndex = fieldOrder.indexOf(right)
+    if (leftIndex === -1 && rightIndex === -1) return left.localeCompare(right)
+    if (leftIndex === -1) return 1
+    if (rightIndex === -1) return -1
+    return leftIndex - rightIndex
+  })
+}
+
 interface AIStructurePanelProps {
   title: string
   placeholder: string
@@ -28,6 +94,8 @@ export default function AIStructurePanel({
   onStructure,
   onApply,
 }: AIStructurePanelProps) {
+  const displayFields = result ? buildDisplayFields(result.fields) : []
+
   return (
     <div className="ai-structure-panel">
       <Space direction="vertical" size="middle" className="ai-structure-stack">
@@ -62,7 +130,7 @@ export default function AIStructurePanel({
                   <Space size={[4, 4]} wrap>
                     {result.missing_fields.map((field) => (
                       <Tag key={field} color="gold">
-                        {field}
+                        {labelOfField(field)}
                       </Tag>
                     ))}
                   </Space>
@@ -71,11 +139,11 @@ export default function AIStructurePanel({
             )}
             <List
               size="small"
-              dataSource={Object.entries(result.fields).filter(([, value]) => value)}
+              dataSource={displayFields}
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无结构化字段" /> }}
               renderItem={([key, value]) => (
                 <List.Item>
-                  <Text strong>{key}</Text>
+                  <Text strong>{labelOfField(key)}</Text>
                   <Text>{value}</Text>
                 </List.Item>
               )}
