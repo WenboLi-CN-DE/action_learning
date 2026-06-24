@@ -48,7 +48,7 @@ def structure_text(payload: LLMStructureRequest, target_type: str) -> LLMStructu
         raise HTTPException(status_code=502, detail=f"LLM 调用失败：无法连接 Qwen API（{exc.__class__.__name__}）") from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"LLM 调用失败：{exc.__class__.__name__}") from exc
-    return LLMStructureResult(**result, model=model)
+    return LLMStructureResult(**llm_service.normalize_structure_payload(result), model=model)
 
 
 @router.post("/structure-requirement", response_model=LLMStructureResult)

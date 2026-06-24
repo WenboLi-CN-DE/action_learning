@@ -123,6 +123,31 @@ def test_structure_project_uses_system_key_when_browser_key_absent(monkeypatch):
     assert "system-key" not in response.text
 
 
+def test_structure_project_normalizes_list_field_values(monkeypatch):
+    monkeypatch.setenv("QWEN_API_KEY", "system-key")
+
+    def fake_call_qwen(*, raw_text, target_type, api_key, model, base_url):
+        return {
+            "fields": {
+                "name": "能效管理能力",
+                "matchable_requirement_types": ["能效优化需求", "能源管理需求", "可持续发展合规需求"],
+            },
+            "missing_fields": [],
+            "follow_up_questions": [],
+            "warnings": [],
+        }
+
+    monkeypatch.setattr("app.llm_service.call_qwen_for_structure", fake_call_qwen)
+
+    response = client.post(
+        "/api/v1/llm/structure-project",
+        json={"raw_text": "我们有能效管理能力。"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["fields"]["matchable_requirement_types"] == "能效优化需求、能源管理需求、可持续发展合规需求"
+
+
 def test_structure_returns_clear_error_without_api_key(monkeypatch):
     monkeypatch.delenv("QWEN_API_KEY", raising=False)
 

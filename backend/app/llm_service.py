@@ -59,12 +59,25 @@ def build_structure_prompt(raw_text: str, target_type: str) -> list[dict[str, st
 
 
 def normalize_structure_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    raw_fields = payload.get("fields") if isinstance(payload.get("fields"), dict) else {}
     return {
-        "fields": payload.get("fields") if isinstance(payload.get("fields"), dict) else {},
+        "fields": {key: normalize_field_value(value) for key, value in raw_fields.items()},
         "missing_fields": payload.get("missing_fields") if isinstance(payload.get("missing_fields"), list) else [],
         "follow_up_questions": payload.get("follow_up_questions") if isinstance(payload.get("follow_up_questions"), list) else [],
         "warnings": payload.get("warnings") if isinstance(payload.get("warnings"), list) else [],
     }
+
+
+def normalize_field_value(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return "、".join(str(item) for item in value if item is not None)
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False)
+    return str(value)
 
 
 def parse_qwen_json_content(content: str) -> dict[str, Any]:
