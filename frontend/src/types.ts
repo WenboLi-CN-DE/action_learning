@@ -90,3 +90,26 @@ export interface CommentPayload {
   author: string
   content: string
 }
+
+export interface LLMSettings {
+  api_key?: string
+  model?: string
+  base_url?: string
+}
+
+export interface LLMStatus {
+  configured: boolean
+  model: string
+}
+
+export interface LLMStructureRequest extends LLMSettings {
+  raw_text: string
+}
+
+export interface LLMStructureResult {
+  fields: Record<string, string | null>
+  missing_fields: string[]
+  follow_up_questions: string[]
+  warnings: string[]
+  model: string
+}

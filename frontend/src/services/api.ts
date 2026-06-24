@@ -1,6 +1,9 @@
 import type {
   CommentItem,
   CommentPayload,
+  LLMSettings,
+  LLMStatus,
+  LLMStructureResult,
   MatchItem,
   MatchPayload,
   ProjectItem,
@@ -82,4 +85,18 @@ export const createComment = (payload: CommentPayload) =>
   fetchJSON<CommentItem>('/comments', {
     method: 'POST',
     body: JSON.stringify(payload),
+  })
+
+export const fetchLLMStatus = () => fetchJSON<LLMStatus>('/llm/status')
+
+export const structureRequirement = (rawText: string, settings: LLMSettings | null) =>
+  fetchJSON<LLMStructureResult>('/llm/structure-requirement', {
+    method: 'POST',
+    body: JSON.stringify({ raw_text: rawText, ...(settings ?? {}) }),
+  })
+
+export const structureProject = (rawText: string, settings: LLMSettings | null) =>
+  fetchJSON<LLMStructureResult>('/llm/structure-project', {
+    method: 'POST',
+    body: JSON.stringify({ raw_text: rawText, ...(settings ?? {}) }),
   })
