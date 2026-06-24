@@ -122,3 +122,8 @@ class CommentRead(SQLModel):
     content: str
     created_at: datetime
     updated_at: datetime
+
+
+class LLMStatusRead(SQLModel):
+    configured: bool
+    model: str
