@@ -55,6 +55,14 @@ import type {
   TagPayload,
 } from '../types'
 import AIStructurePanel from './AIStructurePanel'
+import {
+  buildProjectDescription,
+  buildRequirementDescription,
+  getFieldValue,
+  normalizeProjectStatus,
+  normalizeRequirementStatus,
+  normalizeUrgency,
+} from './aiStructureMapping'
 import { buildDashboardStats, filterDashboardDataByTag } from './dashboardStats'
 import schneiderLogo from '../assets/schneider-electric-cn-logo.png'
 
@@ -300,10 +308,10 @@ export default function WorkbenchPage() {
   function applyProjectAIResult() {
     if (!projectAIResult) return
     projectForm.setFieldsValue({
-      name: projectAIResult.fields.name ?? undefined,
-      owner: projectAIResult.fields.owner ?? undefined,
-      status: projectAIResult.fields.status ?? undefined,
-      description: projectAIResult.fields.description ?? undefined,
+      name: getFieldValue(projectAIResult.fields, 'name'),
+      owner: getFieldValue(projectAIResult.fields, 'owner'),
+      status: normalizeProjectStatus(projectAIResult.fields.status),
+      description: buildProjectDescription(projectAIResult),
     })
     messageApi.success('AI 结果已应用到能力表单')
   }
@@ -311,11 +319,12 @@ export default function WorkbenchPage() {
   function applyRequirementAIResult() {
     if (!requirementAIResult) return
     requirementForm.setFieldsValue({
-      title: requirementAIResult.fields.title ?? undefined,
-      customer: requirementAIResult.fields.customer ?? undefined,
-      contact: requirementAIResult.fields.contact ?? undefined,
-      urgency: requirementAIResult.fields.urgency ?? undefined,
-      description: requirementAIResult.fields.description ?? undefined,
+      title: getFieldValue(requirementAIResult.fields, 'title'),
+      customer: getFieldValue(requirementAIResult.fields, 'customer'),
+      contact: getFieldValue(requirementAIResult.fields, 'contact'),
+      urgency: normalizeUrgency(requirementAIResult.fields.urgency),
+      status: normalizeRequirementStatus(requirementAIResult.fields.status),
+      description: buildRequirementDescription(requirementAIResult),
     })
     messageApi.success('AI 结果已应用到需求表单')
   }
