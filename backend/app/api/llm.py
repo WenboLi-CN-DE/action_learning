@@ -1,9 +1,28 @@
+import re
+
+import httpx
 from fastapi import APIRouter, HTTPException
 
 from app import llm_service
 from app.schemas import LLMStatusRead, LLMStructureRequest, LLMStructureResult
 
 router = APIRouter(prefix="/llm", tags=["llm"])
+
+
+def redact_api_keys(text: str) -> str:
+    return re.sub(r"sk-[A-Za-z0-9_\-]+", "[redacted]", text)
+
+
+def extract_upstream_error(exc: httpx.HTTPStatusError) -> str:
+    status_code = exc.response.status_code
+    message = exc.response.text
+    try:
+        payload = exc.response.json()
+        if isinstance(payload, dict):
+            message = str(payload.get("message") or payload.get("error") or payload.get("detail") or message)
+    except ValueError:
+        pass
+    return f"Qwen API 返回 {status_code}：{redact_api_keys(message)}"
 
 
 @router.get("/status", response_model=LLMStatusRead)
@@ -23,6 +42,10 @@ def structure_text(payload: LLMStructureRequest, target_type: str) -> LLMStructu
         )
     except HTTPException:
         raise
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=502, detail=f"LLM 调用失败：{extract_upstream_error(exc)}") from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"LLM 调用失败：无法连接 Qwen API（{exc.__class__.__name__}）") from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"LLM 调用失败：{exc.__class__.__name__}") from exc
     return LLMStructureResult(**result, model=model)

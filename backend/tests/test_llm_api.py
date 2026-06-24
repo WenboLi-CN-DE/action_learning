@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import httpx
 
 from app.main import app
 
@@ -150,3 +151,28 @@ def test_structure_returns_clear_error_for_invalid_model_json(monkeypatch):
     assert response.status_code == 502
     assert response.json()["detail"] == "LLM 调用失败：ValueError"
     assert "system-key" not in response.text
+
+
+def test_structure_returns_sanitized_upstream_http_error(monkeypatch):
+    monkeypatch.setenv("QWEN_API_KEY", "system-key")
+
+    def fake_call_qwen(*, raw_text, target_type, api_key, model, base_url):
+        request = httpx.Request("POST", f"{base_url}/chat/completions")
+        response = httpx.Response(
+            401,
+            request=request,
+            json={"message": "Invalid API key sk-secret-value"},
+        )
+        raise httpx.HTTPStatusError("upstream auth failed", request=request, response=response)
+
+    monkeypatch.setattr("app.llm_service.call_qwen_for_structure", fake_call_qwen)
+
+    response = client.post(
+        "/api/v1/llm/structure-project",
+        json={"raw_text": "测试能力描述"},
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "LLM 调用失败：Qwen API 返回 401：Invalid API key [redacted]"
+    assert "system-key" not in response.text
+    assert "sk-secret-value" not in response.text
