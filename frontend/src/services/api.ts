@@ -22,7 +22,9 @@ async function fetchJSON<T>(path: string, options: RequestInit = {}): Promise<T>
     ...options,
   })
   if (!response.ok) {
-    throw new Error(`API Error: ${response.status} ${response.statusText}`)
+    const payload = await response.json().catch(() => null)
+    const detail = typeof payload?.detail === 'string' ? payload.detail : null
+    throw new Error(detail ?? `API Error: ${response.status} ${response.statusText}`)
   }
   return response.json()
 }

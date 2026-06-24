@@ -20,7 +20,7 @@ import {
   message,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { EditOutlined, EyeOutlined, LinkOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { EditOutlined, EyeOutlined, LinkOutlined, PlusOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons'
 import {
   createComment,
   createMatch,
@@ -28,16 +28,23 @@ import {
   createRequirement,
   createTag,
   fetchComments,
+  fetchLLMStatus,
   fetchMatches,
   fetchProjects,
   fetchRequirements,
   fetchTags,
+  structureProject,
+  structureRequirement,
   updateProject,
   updateRequirement,
 } from '../services/api'
+import { clearLLMSettings, loadLLMSettings, saveLLMSettings } from '../services/llmSettings'
 import type {
   CommentItem,
   CommentPayload,
+  LLMSettings,
+  LLMStatus,
+  LLMStructureResult,
   MatchItem,
   MatchPayload,
   ProjectItem,
@@ -47,6 +54,7 @@ import type {
   TagItem,
   TagPayload,
 } from '../types'
+import AIStructurePanel from './AIStructurePanel'
 import { buildDashboardStats, filterDashboardDataByTag } from './dashboardStats'
 import schneiderLogo from '../assets/schneider-electric-cn-logo.png'
 
@@ -118,6 +126,17 @@ export default function WorkbenchPage() {
   const [selectedDashboardTagId, setSelectedDashboardTagId] = useState<number | null>(null)
   const [selectedProjectTagId, setSelectedProjectTagId] = useState<number | null>(null)
   const [selectedRequirementTagId, setSelectedRequirementTagId] = useState<number | null>(null)
+  const [llmSettingsOpen, setLLMSettingsOpen] = useState(false)
+  const [llmSettings, setLLMSettings] = useState<LLMSettings | null>(() => loadLLMSettings())
+  const [llmStatus, setLLMStatus] = useState<LLMStatus | null>(null)
+  const [projectRawText, setProjectRawText] = useState('')
+  const [requirementRawText, setRequirementRawText] = useState('')
+  const [projectAIResult, setProjectAIResult] = useState<LLMStructureResult | null>(null)
+  const [requirementAIResult, setRequirementAIResult] = useState<LLMStructureResult | null>(null)
+  const [projectAIError, setProjectAIError] = useState<string | null>(null)
+  const [requirementAIError, setRequirementAIError] = useState<string | null>(null)
+  const [projectAILoading, setProjectAILoading] = useState(false)
+  const [requirementAILoading, setRequirementAILoading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [commentsLoading, setCommentsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -129,6 +148,7 @@ export default function WorkbenchPage() {
   const [commentForm] = Form.useForm<Pick<CommentPayload, 'author' | 'content'>>()
   const [editProjectForm] = Form.useForm<ProjectPayload>()
   const [editRequirementForm] = Form.useForm<RequirementPayload>()
+  const [llmSettingsForm] = Form.useForm<LLMSettings>()
 
   const tagOptions = useMemo(
     () => tags.map((tag) => ({ label: `${tag.name} / ${labelOf(tagCategoryOptions, tag.category)}`, value: tag.id })),
@@ -217,6 +237,12 @@ export default function WorkbenchPage() {
     }
   }, [])
 
+  useEffect(() => {
+    fetchLLMStatus()
+      .then(setLLMStatus)
+      .catch(() => setLLMStatus(null))
+  }, [])
+
   async function submitProject(values: ProjectPayload) {
     await createProject({ ...values, tag_ids: values.tag_ids ?? [] })
     projectForm.resetFields()
@@ -243,6 +269,83 @@ export default function WorkbenchPage() {
     matchForm.resetFields()
     await loadData()
     messageApi.success('匹配已保存')
+  }
+
+  async function runProjectStructuring() {
+    setProjectAILoading(true)
+    setProjectAIError(null)
+    try {
+      const result = await structureProject(projectRawText, llmSettings)
+      setProjectAIResult(result)
+    } catch (err) {
+      setProjectAIError(err instanceof Error ? err.message : 'AI 结构化失败')
+    } finally {
+      setProjectAILoading(false)
+    }
+  }
+
+  async function runRequirementStructuring() {
+    setRequirementAILoading(true)
+    setRequirementAIError(null)
+    try {
+      const result = await structureRequirement(requirementRawText, llmSettings)
+      setRequirementAIResult(result)
+    } catch (err) {
+      setRequirementAIError(err instanceof Error ? err.message : 'AI 结构化失败')
+    } finally {
+      setRequirementAILoading(false)
+    }
+  }
+
+  function applyProjectAIResult() {
+    if (!projectAIResult) return
+    projectForm.setFieldsValue({
+      name: projectAIResult.fields.name ?? undefined,
+      owner: projectAIResult.fields.owner ?? undefined,
+      status: projectAIResult.fields.status ?? undefined,
+      description: projectAIResult.fields.description ?? undefined,
+    })
+    messageApi.success('AI 结果已应用到能力表单')
+  }
+
+  function applyRequirementAIResult() {
+    if (!requirementAIResult) return
+    requirementForm.setFieldsValue({
+      title: requirementAIResult.fields.title ?? undefined,
+      customer: requirementAIResult.fields.customer ?? undefined,
+      contact: requirementAIResult.fields.contact ?? undefined,
+      urgency: requirementAIResult.fields.urgency ?? undefined,
+      description: requirementAIResult.fields.description ?? undefined,
+    })
+    messageApi.success('AI 结果已应用到需求表单')
+  }
+
+  function openLLMSettings() {
+    llmSettingsForm.setFieldsValue({
+      api_key: llmSettings?.api_key,
+      model: llmSettings?.model ?? llmStatus?.model ?? 'qwen3.6-plus',
+      base_url: llmSettings?.base_url,
+    })
+    setLLMSettingsOpen(true)
+  }
+
+  function submitLLMSettings(values: LLMSettings) {
+    const next = {
+      api_key: values.api_key || undefined,
+      model: values.model || undefined,
+      base_url: values.base_url || undefined,
+    }
+    saveLLMSettings(next)
+    setLLMSettings(next)
+    setLLMSettingsOpen(false)
+    messageApi.success('LLM 设置已保存到当前浏览器')
+  }
+
+  function clearLocalLLMSettings() {
+    clearLLMSettings()
+    setLLMSettings(null)
+    llmSettingsForm.resetFields()
+    messageApi.success('已清除本地 LLM 设置')
   }
 
   async function loadComments(target: DetailTarget) {
@@ -427,6 +530,9 @@ export default function WorkbenchPage() {
         </div>
         <Space className="header-actions">
           <span className="environment-pill">MVP</span>
+          <Button icon={<SettingOutlined />} onClick={openLLMSettings}>
+            设置
+          </Button>
           <Button icon={<ReloadOutlined />} onClick={loadData} loading={loading}>
             刷新
           </Button>
@@ -530,6 +636,17 @@ export default function WorkbenchPage() {
                 <div className="workbench-grid">
                   <section className="form-panel">
                     <Title level={4}>新建能力</Title>
+                    <AIStructurePanel
+                      title="AI 结构化能力描述"
+                      placeholder="例如：我们有一个面向数据中心的能耗分析 demo，可以帮助客户识别高耗能设备并给出优化建议..."
+                      rawText={projectRawText}
+                      result={projectAIResult}
+                      loading={projectAILoading}
+                      error={projectAIError}
+                      onRawTextChange={setProjectRawText}
+                      onStructure={runProjectStructuring}
+                      onApply={applyProjectAIResult}
+                    />
                     <Form form={projectForm} layout="vertical" onFinish={submitProject} initialValues={{ status: 'researching', tag_ids: [] }}>
                       <Form.Item name="name" label="能力名称" rules={[{ required: true, message: '请输入能力名称' }]}>
                         <Input />
@@ -574,6 +691,17 @@ export default function WorkbenchPage() {
                 <div className="workbench-grid">
                   <section className="form-panel">
                     <Title level={4}>新建需求</Title>
+                    <AIStructurePanel
+                      title="AI 结构化需求描述"
+                      placeholder="例如：某数据中心客户希望降低 PUE，但目前缺少统一能耗分析，希望近期做一次节能评估..."
+                      rawText={requirementRawText}
+                      result={requirementAIResult}
+                      loading={requirementAILoading}
+                      error={requirementAIError}
+                      onRawTextChange={setRequirementRawText}
+                      onStructure={runRequirementStructuring}
+                      onApply={applyRequirementAIResult}
+                    />
                     <Form form={requirementForm} layout="vertical" onFinish={submitRequirement} initialValues={{ urgency: 'medium', status: 'new', tag_ids: [] }}>
                       <Form.Item name="title" label="需求标题" rules={[{ required: true, message: '请输入需求标题' }]}>
                         <Input />
@@ -676,6 +804,33 @@ export default function WorkbenchPage() {
           ]}
         />
       </Content>
+
+      <Drawer title="LLM 设置" open={llmSettingsOpen} onClose={() => setLLMSettingsOpen(false)}>
+        <Alert
+          className="app-alert"
+          type={llmStatus?.configured ? 'success' : 'warning'}
+          showIcon
+          message={llmStatus?.configured ? '系统默认 Qwen Key 已配置' : '系统默认 Qwen Key 未配置'}
+          description={`默认模型：${llmStatus?.model ?? 'qwen3.6-plus'}。本地设置只保存在当前浏览器，用于临时覆盖。`}
+        />
+        <Form form={llmSettingsForm} layout="vertical" onFinish={submitLLMSettings}>
+          <Form.Item name="api_key" label="API Key">
+            <Input.Password placeholder="留空则使用系统默认配置" />
+          </Form.Item>
+          <Form.Item name="model" label="模型">
+            <Input placeholder="qwen3.6-plus" />
+          </Form.Item>
+          <Form.Item name="base_url" label="Base URL">
+            <Input placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1" />
+          </Form.Item>
+          <Space>
+            <Button type="primary" htmlType="submit">
+              保存
+            </Button>
+            <Button onClick={clearLocalLLMSettings}>清除本地设置</Button>
+          </Space>
+        </Form>
+      </Drawer>
 
       <Drawer
         title={detailTitle ? `${detailTypeLabel}：${detailTitle}` : detailTypeLabel}
