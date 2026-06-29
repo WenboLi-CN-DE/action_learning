@@ -33,7 +33,7 @@
 - Modify: `backend/app/main.py`
 - Test: `backend/tests/test_llm_api.py`
 
-- [ ] **Step 1: Write failing status tests**
+- [x] **Step 1: Write failing status tests**
 
 Add `backend/tests/test_llm_api.py`:
 
@@ -73,7 +73,7 @@ def test_llm_status_reports_configured_system_key(monkeypatch):
     assert "sk-test" not in response.text
 ```
 
-- [ ] **Step 2: Verify status tests fail**
+- [x] **Step 2: Verify status tests fail**
 
 Run:
 
@@ -84,7 +84,7 @@ uv run pytest tests/test_llm_api.py -v
 
 Expected: FAIL with `404 Not Found` for `/api/v1/llm/status`.
 
-- [ ] **Step 3: Add minimal schemas**
+- [x] **Step 3: Add minimal schemas**
 
 Append to `backend/app/schemas.py`:
 
@@ -95,7 +95,7 @@ class LLMStatusRead(SQLModel):
     model: str
 ```
 
-- [ ] **Step 4: Add minimal service and router**
+- [x] **Step 4: Add minimal service and router**
 
 Create `backend/app/llm_service.py`:
 
@@ -137,7 +137,7 @@ from app.api.llm import router as llm_router
 api_router.include_router(llm_router)
 ```
 
-- [ ] **Step 5: Verify status tests pass**
+- [x] **Step 5: Verify status tests pass**
 
 Run:
 
@@ -148,7 +148,7 @@ uv run pytest tests/test_llm_api.py -v
 
 Expected: PASS for both status tests.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/app/schemas.py backend/app/llm_service.py backend/app/api/llm.py backend/app/main.py backend/tests/test_llm_api.py
@@ -163,7 +163,7 @@ git commit -m "feat: add llm status endpoint"
 - Modify: `backend/app/api/llm.py`
 - Modify: `backend/tests/test_llm_api.py`
 
-- [ ] **Step 1: Write failing structuring tests**
+- [x] **Step 1: Write failing structuring tests**
 
 Append to `backend/tests/test_llm_api.py`:
 
@@ -266,7 +266,7 @@ def test_structure_returns_clear_error_without_api_key(monkeypatch):
     assert response.json()["detail"] == "LLM 未配置，请联系管理员或在设置中临时填写 API key"
 ```
 
-- [ ] **Step 2: Verify structuring tests fail**
+- [x] **Step 2: Verify structuring tests fail**
 
 Run:
 
@@ -277,7 +277,7 @@ uv run pytest tests/test_llm_api.py -v
 
 Expected: FAIL because request/response schemas and structuring endpoints are missing.
 
-- [ ] **Step 3: Add structuring schemas**
+- [x] **Step 3: Add structuring schemas**
 
 Append to `backend/app/schemas.py`:
 
@@ -301,7 +301,7 @@ class LLMStructureResult(SQLModel):
     model: str
 ```
 
-- [ ] **Step 4: Implement config resolution and mocked-call seam**
+- [x] **Step 4: Implement config resolution and mocked-call seam**
 
 Replace `backend/app/llm_service.py` with:
 
@@ -390,7 +390,7 @@ def call_qwen_for_structure(
     return normalize_structure_payload(json.loads(content))
 ```
 
-- [ ] **Step 5: Implement structuring routes**
+- [x] **Step 5: Implement structuring routes**
 
 Replace `backend/app/api/llm.py` with:
 
@@ -435,7 +435,7 @@ def structure_project(payload: LLMStructureRequest):
     return structure_text(payload, "project")
 ```
 
-- [ ] **Step 6: Verify backend structuring tests pass**
+- [x] **Step 6: Verify backend structuring tests pass**
 
 Run:
 
@@ -446,7 +446,7 @@ uv run pytest tests/test_llm_api.py -v
 
 Expected: PASS.
 
-- [ ] **Step 7: Run all backend tests**
+- [x] **Step 7: Run all backend tests**
 
 Run:
 
@@ -457,7 +457,7 @@ uv run pytest
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add backend/app/schemas.py backend/app/llm_service.py backend/app/api/llm.py backend/tests/test_llm_api.py
@@ -472,7 +472,7 @@ git commit -m "feat: add qwen structuring api"
 - Create: `frontend/src/services/llmSettings.ts`
 - Create: `frontend/src/pages/llmSettings.typecheck.ts`
 
-- [ ] **Step 1: Write failing typecheck usage**
+- [x] **Step 1: Write failing typecheck usage**
 
 Create `frontend/src/pages/llmSettings.typecheck.ts`:
 
@@ -498,7 +498,7 @@ if (loaded?.model !== 'qwen3.6-plus') {
 clearLLMSettings()
 ```
 
-- [ ] **Step 2: Verify frontend build fails**
+- [x] **Step 2: Verify frontend build fails**
 
 Run:
 
@@ -509,7 +509,7 @@ npm run build
 
 Expected: FAIL because `LLMSettings` and `llmSettings` helpers do not exist.
 
-- [ ] **Step 3: Add LLM types**
+- [x] **Step 3: Add LLM types**
 
 Append to `frontend/src/types.ts`:
 
@@ -539,7 +539,7 @@ export interface LLMStructureResult {
 }
 ```
 
-- [ ] **Step 4: Add API helpers**
+- [x] **Step 4: Add API helpers**
 
 Modify `frontend/src/services/api.ts` imports and exports:
 
@@ -579,7 +579,7 @@ export const structureProject = (rawText: string, settings: LLMSettings | null) 
   })
 ```
 
-- [ ] **Step 5: Add settings persistence helpers**
+- [x] **Step 5: Add settings persistence helpers**
 
 Create `frontend/src/services/llmSettings.ts`:
 
@@ -612,7 +612,7 @@ export function clearLLMSettings() {
 }
 ```
 
-- [ ] **Step 6: Verify frontend build passes**
+- [x] **Step 6: Verify frontend build passes**
 
 Run:
 
@@ -623,7 +623,7 @@ npm run build
 
 Expected: PASS. A Vite chunk-size warning is acceptable.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add frontend/src/types.ts frontend/src/services/api.ts frontend/src/services/llmSettings.ts frontend/src/pages/llmSettings.typecheck.ts
@@ -637,7 +637,7 @@ git commit -m "feat: add frontend llm api helpers"
 - Modify: `frontend/src/App.css`
 - Modify: `frontend/src/pages/WorkbenchPage.tsx`
 
-- [ ] **Step 1: Add reusable component**
+- [x] **Step 1: Add reusable component**
 
 Create `frontend/src/pages/AIStructurePanel.tsx`:
 
@@ -746,7 +746,7 @@ export default function AIStructurePanel({
 }
 ```
 
-- [ ] **Step 2: Add styles**
+- [x] **Step 2: Add styles**
 
 Append to `frontend/src/App.css`:
 
@@ -771,7 +771,7 @@ Append to `frontend/src/App.css`:
 }
 ```
 
-- [ ] **Step 3: Verify component compiles by importing it**
+- [x] **Step 3: Verify component compiles by importing it**
 
 Temporarily import the component in `frontend/src/pages/WorkbenchPage.tsx`:
 
@@ -781,7 +781,7 @@ import AIStructurePanel from './AIStructurePanel'
 
 Do not render it yet in this task.
 
-- [ ] **Step 4: Run frontend build**
+- [x] **Step 4: Run frontend build**
 
 Run:
 
@@ -792,7 +792,7 @@ npm run build
 
 Expected: PASS or FAIL only if lint/compiler reports unused import. If unused import fails, remove the temporary import and defer import to Task 5.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/pages/AIStructurePanel.tsx frontend/src/App.css frontend/src/pages/WorkbenchPage.tsx
@@ -805,7 +805,7 @@ git commit -m "feat: add ai structure panel"
 - Modify: `frontend/src/pages/WorkbenchPage.tsx`
 - Modify: `frontend/src/App.css`
 
-- [ ] **Step 1: Add imports and state**
+- [x] **Step 1: Add imports and state**
 
 Modify `frontend/src/pages/WorkbenchPage.tsx` imports:
 
@@ -834,7 +834,7 @@ const [requirementAILoading, setRequirementAILoading] = useState(false)
 const [llmSettingsForm] = Form.useForm<LLMSettings>()
 ```
 
-- [ ] **Step 2: Load LLM status**
+- [x] **Step 2: Load LLM status**
 
 Add to the existing initial `useEffect` body or a separate `useEffect`:
 
@@ -846,7 +846,7 @@ useEffect(() => {
 }, [])
 ```
 
-- [ ] **Step 3: Add structure/apply handlers**
+- [x] **Step 3: Add structure/apply handlers**
 
 Add functions inside `WorkbenchPage`:
 
@@ -929,7 +929,7 @@ function clearLocalLLMSettings() {
 }
 ```
 
-- [ ] **Step 4: Render settings button and drawer**
+- [x] **Step 4: Render settings button and drawer**
 
 In header `header-actions`, add:
 
@@ -974,7 +974,7 @@ Before the existing detail drawer, add:
 </Drawer>
 ```
 
-- [ ] **Step 5: Render AI panels in project and requirement forms**
+- [x] **Step 5: Render AI panels in project and requirement forms**
 
 In the project form section, insert above `<Form form={projectForm} ...>`:
 
@@ -1008,7 +1008,7 @@ In the requirement form section, insert above `<Form form={requirementForm} ...>
 />
 ```
 
-- [ ] **Step 6: Run frontend build**
+- [x] **Step 6: Run frontend build**
 
 Run:
 
@@ -1019,7 +1019,7 @@ npm run build
 
 Expected: PASS. Fix import collisions or long-line formatting if TypeScript fails.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add frontend/src/pages/WorkbenchPage.tsx frontend/src/App.css
@@ -1032,7 +1032,7 @@ git commit -m "feat: wire ai structuring into workbench"
 - Modify: `README.md`
 - Modify: `docs/deployment-notes.md`
 
-- [ ] **Step 1: Document environment variables**
+- [x] **Step 1: Document environment variables**
 
 Add to `README.md` near deployment instructions:
 
@@ -1050,7 +1050,7 @@ API key 不会写入数据库。页面右上角“设置”可为当前浏览器
 
 Add the same variable summary to `docs/deployment-notes.md`.
 
-- [ ] **Step 2: Run backend tests**
+- [x] **Step 2: Run backend tests**
 
 Run:
 
@@ -1061,7 +1061,7 @@ uv run pytest
 
 Expected: PASS.
 
-- [ ] **Step 3: Run frontend build and lint**
+- [x] **Step 3: Run frontend build and lint**
 
 Run:
 
@@ -1073,7 +1073,7 @@ npm run lint
 
 Expected: PASS. Existing Vite chunk-size warning is acceptable.
 
-- [ ] **Step 4: Manual smoke test**
+- [x] **Step 4: Manual smoke test**
 
 Run dev servers:
 
@@ -1088,14 +1088,14 @@ Open `http://127.0.0.1:5173` and verify:
 - With a temporary browser key, both requirement and project AI buttons call the backend.
 - Manual project and requirement creation still works without using AI.
 
-- [ ] **Step 5: Commit docs and final verification**
+- [x] **Step 5: Commit docs and final verification**
 
 ```bash
 git add README.md docs/deployment-notes.md
 git commit -m "docs: document llm configuration"
 ```
 
-- [ ] **Step 6: Final status**
+- [x] **Step 6: Final status**
 
 Run:
 
