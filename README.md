@@ -113,6 +113,22 @@ macOS / Linux：
 sudo env APP_DIR=/opt/action_learning SERVICE_USER=wenbo bash scripts/deploy-ubuntu.sh
 ```
 
+### LLM 配置
+
+AI 结构化输入默认使用 Qwen OpenAI-compatible API。生产部署推荐在后端服务环境中配置：
+
+- `QWEN_API_KEY`：系统默认 API key
+- `QWEN_MODEL`：模型名，默认 `qwen3.6-plus`
+- `QWEN_BASE_URL`：可选，默认 DashScope OpenAI-compatible endpoint
+
+API key 不会写入数据库。页面右上角“设置”可为当前浏览器临时覆盖配置，方便演示或 key 失效时快速切换。
+
+Ubuntu systemd 部署时，可在 `/etc/action-learning.env` 中配置上述变量，然后重启服务：
+
+```bash
+sudo systemctl restart action-learning
+```
+
 部署模板：
 
 - `deploy/action-learning.service`

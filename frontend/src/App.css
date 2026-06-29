@@ -309,6 +309,40 @@
   line-height: 1.6;
 }
 
+.ai-structure-panel {
+  margin-bottom: 18px;
+  padding: 14px;
+  border: 1px solid #d7eadb;
+  border-radius: 8px;
+  background: #f8fcf8;
+}
+
+.ai-structure-panel h5.ant-typography {
+  margin: 0 0 6px;
+  color: #0a2f24;
+}
+
+.ai-structure-stack {
+  width: 100%;
+}
+
+.ai-result {
+  display: grid;
+  gap: 12px;
+}
+
+.ai-result .ant-list-item {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.ai-question-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
 .form-panel,
 .table-panel {
   min-width: 0;

@@ -92,6 +92,28 @@ sudo env APP_DIR=/opt/action_learning SERVICE_USER=wenbo bash scripts/deploy-ubu
 | `BACKEND_PORT` | `8000` | 后端监听端口 |
 | `NGINX_SITE` | `action-learning` | Nginx site 名称 |
 
+### LLM 环境变量
+
+AI 结构化输入默认使用 Qwen OpenAI-compatible API。推荐在 systemd 服务环境中配置：
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `QWEN_API_KEY` | 无 | 系统默认 Qwen API key，未配置时用户仍可手动录入或在页面设置中临时覆盖 |
+| `QWEN_MODEL` | `qwen3.6-plus` | 默认模型 |
+| `QWEN_BASE_URL` | DashScope OpenAI-compatible endpoint | 兼容接口地址 |
+
+API key 不写入 SQLite。页面右上角“设置”只保存当前浏览器的临时覆盖配置。
+
+部署模板会读取可选环境文件 `/etc/action-learning.env`。可用以下方式配置：
+
+```bash
+sudo tee /etc/action-learning.env >/dev/null <<'EOF'
+QWEN_API_KEY=sk-...
+QWEN_MODEL=qwen3.6-plus
+EOF
+sudo systemctl restart action-learning
+```
+
 ### 部署后验证
 
 ```bash

@@ -1,6 +1,9 @@
 import type {
   CommentItem,
   CommentPayload,
+  LLMSettings,
+  LLMStatus,
+  LLMStructureResult,
   MatchItem,
   MatchPayload,
   ProjectItem,
@@ -19,7 +22,9 @@ async function fetchJSON<T>(path: string, options: RequestInit = {}): Promise<T>
     ...options,
   })
   if (!response.ok) {
-    throw new Error(`API Error: ${response.status} ${response.statusText}`)
+    const payload = await response.json().catch(() => null)
+    const detail = typeof payload?.detail === 'string' ? payload.detail : null
+    throw new Error(detail ?? `API Error: ${response.status} ${response.statusText}`)
   }
   return response.json()
 }
@@ -82,4 +87,18 @@ export const createComment = (payload: CommentPayload) =>
   fetchJSON<CommentItem>('/comments', {
     method: 'POST',
     body: JSON.stringify(payload),
+  })
+
+export const fetchLLMStatus = () => fetchJSON<LLMStatus>('/llm/status')
+
+export const structureRequirement = (rawText: string, settings: LLMSettings | null) =>
+  fetchJSON<LLMStructureResult>('/llm/structure-requirement', {
+    method: 'POST',
+    body: JSON.stringify({ raw_text: rawText, ...(settings ?? {}) }),
+  })
+
+export const structureProject = (rawText: string, settings: LLMSettings | null) =>
+  fetchJSON<LLMStructureResult>('/llm/structure-project', {
+    method: 'POST',
+    body: JSON.stringify({ raw_text: rawText, ...(settings ?? {}) }),
   })

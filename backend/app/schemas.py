@@ -122,3 +122,26 @@ class CommentRead(SQLModel):
     content: str
     created_at: datetime
     updated_at: datetime
+
+
+class LLMStatusRead(SQLModel):
+    configured: bool
+    model: str
+
+
+class LLMOverride(SQLModel):
+    api_key: str | None = None
+    model: str | None = None
+    base_url: str | None = None
+
+
+class LLMStructureRequest(LLMOverride):
+    raw_text: str
+
+
+class LLMStructureResult(SQLModel):
+    fields: dict[str, str | None] = {}
+    missing_fields: list[str] = []
+    follow_up_questions: list[str] = []
+    warnings: list[str] = []
+    model: str
