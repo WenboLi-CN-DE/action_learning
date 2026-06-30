@@ -20,7 +20,7 @@ import {
   message,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { EditOutlined, EyeOutlined, LinkOutlined, PlusOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons'
+import { EditOutlined, EyeOutlined, LinkOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons'
 import {
   createComment,
   createMatch,
@@ -33,12 +33,14 @@ import {
   fetchProjects,
   fetchRequirements,
   fetchTags,
+  recognizeImage,
   structureProject,
   structureRequirement,
   updateProject,
   updateRequirement,
 } from '../services/api'
 import { clearLLMSettings, loadLLMSettings, saveLLMSettings } from '../services/llmSettings'
+import { useNavigate } from 'react-router'
 import type {
   CommentItem,
   CommentPayload,
@@ -123,6 +125,7 @@ function labelOf(options: { label: string; value: string }[], value: string) {
 type DetailTarget = { type: 'project'; item: ProjectItem } | { type: 'requirement'; item: RequirementItem }
 
 export default function WorkbenchPage() {
+  const navigate = useNavigate()
   const [projects, setProjects] = useState<ProjectItem[]>([])
   const [requirements, setRequirements] = useState<RequirementItem[]>([])
   const [tags, setTags] = useState<TagItem[]>([])
@@ -303,6 +306,26 @@ export default function WorkbenchPage() {
     } finally {
       setRequirementAILoading(false)
     }
+  }
+
+  async function recognizeProjectImage(file: File) {
+    const result = await recognizeImage(
+      file,
+      '请识别图片中和后端预研能力、项目方案、适用场景、负责人、成熟度、可交付形式有关的信息，整理为中文描述。',
+      llmSettings,
+    )
+    messageApi.success('图片内容已识别，可继续 AI 结构化')
+    return result.text
+  }
+
+  async function recognizeRequirementImage(file: File) {
+    const result = await recognizeImage(
+      file,
+      '请识别图片中和客户需求、客户名称、业务场景、痛点、期望能力、紧急程度、时间节点有关的信息，整理为中文描述。',
+      llmSettings,
+    )
+    messageApi.success('图片内容已识别，可继续 AI 结构化')
+    return result.text
   }
 
   function applyProjectAIResult() {
@@ -539,6 +562,9 @@ export default function WorkbenchPage() {
         </div>
         <Space className="header-actions">
           <span className="environment-pill">MVP</span>
+          <Button type="primary" icon={<SearchOutlined />} onClick={() => navigate('/search')}>
+            智能搜索
+          </Button>
           <Button icon={<SettingOutlined />} onClick={openLLMSettings}>
             设置
           </Button>
@@ -655,6 +681,7 @@ export default function WorkbenchPage() {
                       onRawTextChange={setProjectRawText}
                       onStructure={runProjectStructuring}
                       onApply={applyProjectAIResult}
+                      onImageRecognize={recognizeProjectImage}
                     />
                     <Form form={projectForm} layout="vertical" onFinish={submitProject} initialValues={{ status: 'researching', tag_ids: [] }}>
                       <Form.Item name="name" label="能力名称" rules={[{ required: true, message: '请输入能力名称' }]}>
@@ -710,6 +737,7 @@ export default function WorkbenchPage() {
                       onRawTextChange={setRequirementRawText}
                       onStructure={runRequirementStructuring}
                       onApply={applyRequirementAIResult}
+                      onImageRecognize={recognizeRequirementImage}
                     />
                     <Form form={requirementForm} layout="vertical" onFinish={submitRequirement} initialValues={{ urgency: 'medium', status: 'new', tag_ids: [] }}>
                       <Form.Item name="title" label="需求标题" rules={[{ required: true, message: '请输入需求标题' }]}>

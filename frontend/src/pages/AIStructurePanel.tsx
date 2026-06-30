@@ -1,5 +1,6 @@
-import { Alert, Button, Empty, Input, List, Space, Tag, Typography } from 'antd'
-import { RobotOutlined } from '@ant-design/icons'
+import { useState } from 'react'
+import { Alert, Button, Empty, Input, List, Space, Tag, Typography, Upload } from 'antd'
+import { RobotOutlined, UploadOutlined } from '@ant-design/icons'
 import type { LLMStructureResult } from '../types'
 
 const { Text, Title } = Typography
@@ -81,6 +82,7 @@ interface AIStructurePanelProps {
   onRawTextChange: (value: string) => void
   onStructure: () => void
   onApply: () => void
+  onImageRecognize?: (file: File) => Promise<string>
 }
 
 export default function AIStructurePanel({
@@ -93,8 +95,26 @@ export default function AIStructurePanel({
   onRawTextChange,
   onStructure,
   onApply,
+  onImageRecognize,
 }: AIStructurePanelProps) {
   const displayFields = result ? buildDisplayFields(result.fields) : []
+  const [imageLoading, setImageLoading] = useState(false)
+  const [imageError, setImageError] = useState<string | null>(null)
+
+  async function handleImageFile(file: File) {
+    if (!onImageRecognize) return
+    setImageLoading(true)
+    setImageError(null)
+    try {
+      const text = await onImageRecognize(file)
+      const nextText = rawText.trim() ? `${rawText.trim()}\n\n${text}` : text
+      onRawTextChange(nextText)
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : '图片识别失败')
+    } finally {
+      setImageLoading(false)
+    }
+  }
 
   return (
     <div className="ai-structure-panel">
@@ -113,10 +133,25 @@ export default function AIStructurePanel({
           <Button icon={<RobotOutlined />} onClick={onStructure} loading={loading} disabled={!rawText.trim()}>
             AI 结构化
           </Button>
+          {onImageRecognize && (
+            <Upload
+              accept="image/png,image/jpeg,image/jpg,image/webp"
+              showUploadList={false}
+              beforeUpload={(file) => {
+                void handleImageFile(file)
+                return false
+              }}
+            >
+              <Button icon={<UploadOutlined />} loading={imageLoading}>
+                图片识别
+              </Button>
+            </Upload>
+          )}
           <Button type="primary" onClick={onApply} disabled={!result}>
             应用到表单
           </Button>
         </Space>
+        {imageError && <Alert type="error" showIcon message={imageError} />}
         {error && <Alert type="error" showIcon message={error} />}
         {result && (
           <div className="ai-result">

@@ -1,6 +1,7 @@
 import type {
   CommentItem,
   CommentPayload,
+  LLMImageRecognitionResult,
   LLMSettings,
   LLMStatus,
   LLMStructureResult,
@@ -8,6 +9,9 @@ import type {
   MatchPayload,
   ProjectItem,
   ProjectPayload,
+  RAGImportResult,
+  RAGQueryResult,
+  RAGRetrieveResult,
   RequirementItem,
   RequirementPayload,
   TagItem,
@@ -20,6 +24,19 @@ async function fetchJSON<T>(path: string, options: RequestInit = {}): Promise<T>
   const response = await fetch(`${API_BASE}${path}`, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
+  })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const detail = typeof payload?.detail === 'string' ? payload.detail : null
+    throw new Error(detail ?? `API Error: ${response.status} ${response.statusText}`)
+  }
+  return response.json()
+}
+
+async function fetchFormData<T>(path: string, formData: FormData): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    body: formData,
   })
   if (!response.ok) {
     const payload = await response.json().catch(() => null)
@@ -102,3 +119,39 @@ export const structureProject = (rawText: string, settings: LLMSettings | null) 
     method: 'POST',
     body: JSON.stringify({ raw_text: rawText, ...(settings ?? {}) }),
   })
+
+export const recognizeImage = (file: File, prompt: string, settings: LLMSettings | null) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('prompt', prompt)
+  if (settings?.api_key) formData.append('api_key', settings.api_key)
+  if (settings?.model) formData.append('model', settings.model)
+  if (settings?.base_url) formData.append('base_url', settings.base_url)
+  return fetchFormData<LLMImageRecognitionResult>('/llm/recognize-image', formData)
+}
+
+// RAG 知识检索
+export const ragQuery = (question: string, topK = 5, filters: Record<string, unknown> = {}) =>
+  fetchJSON<RAGQueryResult>('/rag/query', {
+    method: 'POST',
+    body: JSON.stringify({ question, top_k: topK, filters }),
+  })
+
+export const ragRetrieve = (query: string, topK = 5, filters: Record<string, unknown> = {}) =>
+  fetchJSON<RAGRetrieveResult>('/rag/retrieve', {
+    method: 'POST',
+    body: JSON.stringify({ query, top_k: topK, filters }),
+  })
+
+export const importRAGFile = (
+  file: File,
+  options: { source_type?: string; source_id?: string; tags?: string; owner_role?: string },
+) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('source_type', options.source_type ?? 'manual')
+  if (options.source_id) formData.append('source_id', options.source_id)
+  if (options.tags) formData.append('tags', options.tags)
+  if (options.owner_role) formData.append('owner_role', options.owner_role)
+  return fetchFormData<RAGImportResult>('/rag/import-file', formData)
+}

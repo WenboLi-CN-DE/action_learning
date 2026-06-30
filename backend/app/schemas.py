@@ -145,3 +145,69 @@ class LLMStructureResult(SQLModel):
     follow_up_questions: list[str] = []
     warnings: list[str] = []
     model: str
+
+
+class LLMImageRecognitionResult(SQLModel):
+    text: str
+    model: str
+
+
+class RAGIngestRequest(SQLModel):
+    title: str
+    content: str
+    source_type: str = "manual"
+    source_id: str | None = None
+    tags: list[str] = []
+    owner_role: str | None = None
+
+
+class RAGIngestResult(SQLModel):
+    doc_id: str
+    chunk_count: int
+
+
+class RAGImportResult(SQLModel):
+    doc_id: str
+    chunk_count: int
+    title: str
+
+
+class RAGRetrieveRequest(SQLModel):
+    query: str
+    top_k: int = 5
+    filters: dict[str, str | list[str] | None] = {}
+
+
+class RAGQueryRequest(SQLModel):
+    question: str
+    top_k: int = 5
+    filters: dict[str, str | list[str] | None] = {}
+
+
+class RAGChunkRead(SQLModel):
+    chunk_id: str
+    doc_id: str
+    score: float
+    text: str
+    title: str | None = None
+    source_type: str | None = None
+    source_id: str | None = None
+    tags: list[str] = []
+    owner_role: str | None = None
+
+
+class RAGCitationRead(SQLModel):
+    chunk_id: str
+    doc_id: str
+    title: str | None = None
+    score: float
+
+
+class RAGRetrieveResult(SQLModel):
+    chunks: list[RAGChunkRead] = []
+
+
+class RAGQueryResult(SQLModel):
+    answer: str
+    citations: list[RAGCitationRead] = []
+    retrieved_chunks: list[RAGChunkRead] = []

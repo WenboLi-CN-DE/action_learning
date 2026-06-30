@@ -113,3 +113,43 @@ export interface LLMStructureResult {
   warnings: string[]
   model: string
 }
+
+export interface LLMImageRecognitionResult {
+  text: string
+  model: string
+}
+
+export interface RAGChunk {
+  chunk_id: string
+  doc_id: string
+  score: number
+  text: string
+  title: string | null
+  source_type: string | null
+  source_id: string | null
+  tags: string[]
+  owner_role: string | null
+}
+
+export interface RAGCitation {
+  chunk_id: string
+  doc_id: string
+  title: string | null
+  score: number
+}
+
+export interface RAGQueryResult {
+  answer: string
+  citations: RAGCitation[]
+  retrieved_chunks: RAGChunk[]
+}
+
+export interface RAGRetrieveResult {
+  chunks: RAGChunk[]
+}
+
+export interface RAGImportResult {
+  doc_id: string
+  chunk_count: number
+  title: string
+}

@@ -201,3 +201,57 @@ def test_structure_returns_sanitized_upstream_http_error(monkeypatch):
     assert response.json()["detail"] == "LLM 调用失败：Qwen API 返回 401：Invalid API key [redacted]"
     assert "system-key" not in response.text
     assert "sk-secret-value" not in response.text
+
+
+def test_recognize_image_returns_extracted_text(monkeypatch):
+    monkeypatch.delenv("QWEN_API_KEY", raising=False)
+
+    def fake_call_qwen(*, image_bytes, mime_type, prompt, api_key, model, base_url):
+        assert image_bytes == b"fake-png"
+        assert mime_type == "image/png"
+        assert "需求" in prompt
+        assert api_key == "browser-key"
+        assert model == "qwen3.6-plus"
+        assert base_url
+        return "图片中包含：客户希望建设楼宇能耗监测平台。"
+
+    monkeypatch.setattr("app.llm_service.call_qwen_for_image_recognition", fake_call_qwen)
+
+    response = client.post(
+        "/api/v1/llm/recognize-image",
+        data={
+            "prompt": "请识别图片中的需求信息",
+            "api_key": "browser-key",
+        },
+        files={"file": ("requirement.png", b"fake-png", "image/png")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "楼宇能耗监测" in payload["text"]
+    assert payload["model"] == "qwen3.6-plus"
+    assert "browser-key" not in response.text
+
+
+def test_recognize_image_rejects_unsupported_file(monkeypatch):
+    monkeypatch.setenv("QWEN_API_KEY", "system-key")
+
+    response = client.post(
+        "/api/v1/llm/recognize-image",
+        files={"file": ("notes.txt", b"hello", "text/plain")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "仅支持 PNG、JPG、JPEG、WEBP 图片"
+
+
+def test_recognize_image_requires_api_key(monkeypatch):
+    monkeypatch.delenv("QWEN_API_KEY", raising=False)
+
+    response = client.post(
+        "/api/v1/llm/recognize-image",
+        files={"file": ("requirement.png", b"fake-png", "image/png")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "LLM 未配置，请联系管理员或在设置中临时填写 API key"

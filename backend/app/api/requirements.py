@@ -4,6 +4,7 @@ from sqlmodel import Session, select
 from app.api.utils import load_tags
 from app.database import get_session
 from app.models import Requirement, utc_now
+from app.rag.sync import sync_requirement_to_rag
 from app.schemas import RequirementCreate, RequirementRead, RequirementUpdate
 
 router = APIRouter(prefix="/requirements", tags=["requirements"])
@@ -29,6 +30,17 @@ def create_requirement(payload: RequirementCreate, session: Session = Depends(ge
     session.add(requirement)
     session.commit()
     session.refresh(requirement)
+    # 异步同步到 RAG 索引
+    sync_requirement_to_rag(
+        requirement_id=requirement.id,
+        title=requirement.title,
+        description=requirement.description,
+        customer=requirement.customer,
+        contact=requirement.contact,
+        urgency=requirement.urgency,
+        status=requirement.status,
+        tags=[t.name for t in requirement.tags],
+    )
     return requirement
 
 
@@ -60,4 +72,15 @@ def update_requirement(
     session.add(requirement)
     session.commit()
     session.refresh(requirement)
+    # 异步同步到 RAG 索引
+    sync_requirement_to_rag(
+        requirement_id=requirement.id,
+        title=requirement.title,
+        description=requirement.description,
+        customer=requirement.customer,
+        contact=requirement.contact,
+        urgency=requirement.urgency,
+        status=requirement.status,
+        tags=[t.name for t in requirement.tags],
+    )
     return requirement

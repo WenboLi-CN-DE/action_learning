@@ -4,6 +4,7 @@ from sqlmodel import Session, select
 from app.api.utils import load_tags
 from app.database import get_session
 from app.models import Project, utc_now
+from app.rag.sync import sync_project_to_rag
 from app.schemas import ProjectCreate, ProjectRead, ProjectUpdate
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -27,6 +28,15 @@ def create_project(payload: ProjectCreate, session: Session = Depends(get_sessio
     session.add(project)
     session.commit()
     session.refresh(project)
+    # 异步同步到 RAG 索引
+    sync_project_to_rag(
+        project_id=project.id,
+        name=project.name,
+        description=project.description,
+        owner=project.owner,
+        status=project.status,
+        tags=[t.name for t in project.tags],
+    )
     return project
 
 
@@ -54,4 +64,13 @@ def update_project(project_id: int, payload: ProjectUpdate, session: Session = D
     session.add(project)
     session.commit()
     session.refresh(project)
+    # 异步同步到 RAG 索引
+    sync_project_to_rag(
+        project_id=project.id,
+        name=project.name,
+        description=project.description,
+        owner=project.owner,
+        status=project.status,
+        tags=[t.name for t in project.tags],
+    )
     return project

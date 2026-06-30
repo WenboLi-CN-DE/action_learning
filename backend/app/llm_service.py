@@ -1,5 +1,6 @@
 import json
 import os
+import base64
 from typing import Any
 
 import httpx
@@ -115,3 +116,40 @@ def call_qwen_for_structure(
     response.raise_for_status()
     content = response.json()["choices"][0]["message"]["content"]
     return parse_qwen_json_content(content)
+
+
+def call_qwen_for_image_recognition(
+    *,
+    image_bytes: bytes,
+    mime_type: str,
+    prompt: str,
+    api_key: str,
+    model: str,
+    base_url: str,
+) -> str:
+    image_base64 = base64.b64encode(image_bytes).decode("ascii")
+    data_url = f"data:{mime_type};base64,{image_base64}"
+    response = httpx.post(
+        f"{base_url}/chat/completions",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json={
+            "model": model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "你是施耐德电气内部 AI 工坊平台的信息提取助手。请提取图片中和客户需求、业务场景、产品能力、项目方案有关的文字与含义。",
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                    ],
+                },
+            ],
+            "temperature": 0.1,
+        },
+        timeout=45.0,
+    )
+    response.raise_for_status()
+    return str(response.json()["choices"][0]["message"]["content"]).strip()

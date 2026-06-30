@@ -6,6 +6,7 @@ from app.api.health import router as health_router
 from app.api.llm import router as llm_router
 from app.api.matches import router as matches_router
 from app.api.projects import router as projects_router
+from app.api.rag import router as rag_router
 from app.api.requirements import router as requirements_router
 from app.api.tags import router as tags_router
 from app.database import create_db_and_tables
@@ -30,6 +31,7 @@ api_router.include_router(tags_router)
 api_router.include_router(matches_router)
 api_router.include_router(comments_router)
 api_router.include_router(llm_router)
+api_router.include_router(rag_router)
 app.include_router(api_router)
 
 create_db_and_tables()
