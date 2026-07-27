@@ -20,20 +20,15 @@
 }
 
 .role-selection-logo {
-  width: 220px;
-  padding: 14px 18px;
-  border-radius: 8px;
-  background: #ffffff;
+  display: block;
+  width: 260px;
+  height: auto;
+  margin: 0 auto;
 }
 
 .role-selection-content h1.ant-typography {
   margin: 28px 0 8px;
   color: #ffffff;
-}
-
-.role-selection-lead {
-  color: rgba(255, 255, 255, 0.76);
-  font-size: 16px;
 }
 
 .role-card-grid {

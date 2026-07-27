@@ -57,9 +57,6 @@ export default function RoleSelectionPage() {
       <Content className="role-selection-content">
         <img className="role-selection-logo" src={schneiderLogo} alt="Schneider Electric" />
         <Title level={1}>选择你的工作身份</Title>
-        <Text className="role-selection-lead">
-          无需密码。身份仅保存在当前浏览器，可在工作台随时切换。
-        </Text>
 
         <div className="role-card-grid">
           {roleOptions.map((option) => (
