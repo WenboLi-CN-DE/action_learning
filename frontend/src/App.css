@@ -277,6 +277,30 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+.requirements-workbench {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+}
+
+.requirements-workbench .requirement-form-panel {
+  width: min(720px, 100%);
+  border-color: #b8e6c1;
+  box-shadow:
+    inset 4px 0 0 #3dcd58,
+    0 12px 30px rgba(10, 47, 36, 0.1);
+}
+
+.requirements-workbench .requirement-form-panel h4.ant-typography {
+  text-align: center;
+  font-size: 22px;
+}
+
+.requirements-workbench .table-panel {
+  width: 100%;
+}
+
 .review-queue {
   display: grid;
   gap: 18px;
