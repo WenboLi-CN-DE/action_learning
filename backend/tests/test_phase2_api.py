@@ -39,6 +39,7 @@ def test_phase2_project_requirement_tag_and_match_flow():
             "contact": "销售一组",
             "urgency": "high",
             "status": "new",
+            "submitted_by": "销售一组",
             "tag_ids": [tag["id"]],
         },
     )
@@ -80,6 +81,7 @@ def test_duplicate_match_returns_existing_link():
             "customer": "测试客户",
             "urgency": "medium",
             "status": "new",
+            "submitted_by": "测试销售",
             "tag_ids": [],
         },
     ).json()

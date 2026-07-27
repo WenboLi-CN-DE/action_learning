@@ -4,7 +4,6 @@ import {
   Button,
   Card,
   Descriptions,
-  Divider,
   Drawer,
   Empty,
   Form,
@@ -74,6 +73,11 @@ import {
 } from './aiStructureMapping'
 import { buildDashboardStats, filterDashboardDataByTag } from './dashboardStats'
 import ReviewQueue from './ReviewQueue'
+import {
+  getRequirementDataIssues,
+  getRequirementReviewPresentation,
+  isRequirementDescriptionIncomplete,
+} from './requirementDetail'
 import { getRoleCapabilities, ROLE_LABELS } from '../auth/permissions'
 import { useRoleStore } from '../auth/roleStore'
 import { useAssistantStore } from '../stores/assistantStore'
@@ -119,6 +123,17 @@ const tagCategoryOptions = [
   { label: '业务线', value: 'business' },
   { label: '技术', value: 'technology' },
   { label: '通用', value: 'general' },
+]
+
+const requirementDescriptionRules = [
+  { required: true, message: '请输入需求描述' },
+  {
+    validator: (_: unknown, value?: string) => (
+      value && !isRequirementDescriptionIncomplete(value)
+        ? Promise.resolve()
+        : Promise.reject(new Error('请至少说明业务场景、目标或期望结果'))
+    ),
+  },
 ]
 
 function renderTags(tags: TagItem[]) {
@@ -486,7 +501,7 @@ export default function WorkbenchPage() {
         ? target.item.assigned_reviewer || displayName
         : '',
     )
-    commentForm.resetFields()
+    commentForm.setFieldsValue({ author: displayName, content: '' })
     await Promise.all([
       loadComments(target),
       target.type === 'requirement'
@@ -748,8 +763,13 @@ export default function WorkbenchPage() {
 
   const coverageLabel = (status: string) => labelOf(coverageOptions, status)
   const coverageColor = (status: string) => (status === 'covered' ? '#3dcd58' : status === 'partial' ? '#d9a300' : '#d9363e')
-  const detailTitle = detailTarget?.type === 'project' ? detailTarget.item.name : detailTarget?.item.title
   const detailTypeLabel = detailTarget?.type === 'project' ? '能力详情' : '需求详情'
+  const requirementDataIssues = detailTarget?.type === 'requirement'
+    ? getRequirementDataIssues(detailTarget.item)
+    : []
+  const requirementReview = detailTarget?.type === 'requirement'
+    ? getRequirementReviewPresentation(detailTarget.item)
+    : null
   const visibleTabKeys = role === 'admin'
     ? ['dashboard', 'projects', 'requirements', 'reviews', 'tags', 'matches']
     : role === 'research'
@@ -1004,7 +1024,7 @@ export default function WorkbenchPage() {
                         <Form.Item name="tag_ids" label="标签">
                           <Select mode="multiple" options={tagOptions} />
                         </Form.Item>
-                        <Form.Item name="description" label="描述" rules={[{ required: true, message: '请输入需求描述' }]}>
+                        <Form.Item name="description" label="描述" rules={requirementDescriptionRules}>
                           <TextArea rows={4} />
                         </Form.Item>
                         <Button type="primary" htmlType="submit" icon={<PlusOutlined />} block>
@@ -1174,7 +1194,7 @@ export default function WorkbenchPage() {
       </Drawer>
 
       <Drawer
-        title={detailTitle ? `${detailTypeLabel}：${detailTitle}` : detailTypeLabel}
+        title={detailTarget ? `${detailTypeLabel} #${detailTarget.item.id}` : detailTypeLabel}
         size="large"
         open={detailTarget !== null}
         onClose={() => {
@@ -1196,179 +1216,288 @@ export default function WorkbenchPage() {
 
         {detailTarget?.type === 'requirement' && (
           <>
-          <Descriptions bordered column={1} size="small">
-            <Descriptions.Item label="需求标题">{detailTarget.item.title}</Descriptions.Item>
-            <Descriptions.Item label="客户">{detailTarget.item.customer}</Descriptions.Item>
-            <Descriptions.Item label="联系人">{detailTarget.item.contact || '-'}</Descriptions.Item>
-            <Descriptions.Item label="紧急度">{labelOf(urgencyOptions, detailTarget.item.urgency)}</Descriptions.Item>
-            <Descriptions.Item label="状态">{labelOf(requirementStatusOptions, detailTarget.item.status)}</Descriptions.Item>
-            <Descriptions.Item label="标签">{renderTags(detailTarget.item.tags)}</Descriptions.Item>
-            <Descriptions.Item label="描述">{detailTarget.item.description}</Descriptions.Item>
-          </Descriptions>
-          <Space style={{ marginTop: 12 }}>
-            {capabilities.canCreateRequirement && ['draft', 'new', 'reviewing'].includes(detailTarget.item.status) && (
-              <Button type="primary" onClick={() => changeRequirementStatus('pending_review')}>
-                {detailTarget.item.status === 'draft' ? '重新提交审核' : '提交审核'}
-              </Button>
-            )}
-            {role === 'admin' && ['accepted', 'matching'].includes(detailTarget.item.status) && (
-              <Button danger onClick={() => changeRequirementStatus('shelved')}>
-                搁置需求
-              </Button>
-            )}
-            {role === 'admin' && detailTarget.item.status === 'shelved' && (
-              <Button type="primary" onClick={() => changeRequirementStatus('accepted')}>
-                恢复受理
-              </Button>
-            )}
-            {role === 'admin' && detailTarget.item.status === 'closed' && (
-              <Button onClick={() => changeRequirementStatus('shelved')}>
-                迁移为已搁置
-              </Button>
-            )}
-          </Space>
-          <Card
-            size="small"
-            className="requirement-review-card"
-            title="审核责任"
-            extra={<AntTag color={detailTarget.item.reviewed_by ? 'green' : detailTarget.item.assigned_reviewer ? 'blue' : 'gold'}>
-              {detailTarget.item.reviewed_by ? '已审核' : detailTarget.item.assigned_reviewer ? '已指派' : '待指派'}
-            </AntTag>}
-          >
-            <Descriptions column={1} size="small">
-              <Descriptions.Item label="需求提交人">{detailTarget.item.submitted_by || '-'}</Descriptions.Item>
-              <Descriptions.Item label="审核负责人">{detailTarget.item.assigned_reviewer || '尚未指派'}</Descriptions.Item>
-              <Descriptions.Item label="实际审核人">
-                {detailTarget.item.reviewed_by
-                  ? `${detailTarget.item.reviewed_by}${detailTarget.item.reviewed_at ? ` · ${new Date(detailTarget.item.reviewed_at).toLocaleString()}` : ''}`
-                  : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="审核意见">{detailTarget.item.review_note || '-'}</Descriptions.Item>
-            </Descriptions>
-            {role === 'admin' && ['new', 'reviewing', 'pending_review'].includes(detailTarget.item.status) && (
-              <div className="reviewer-assignment">
-                <Text strong>指派审核负责人</Text>
-                <Text type="secondary">
-                  {['new', 'reviewing'].includes(detailTarget.item.status)
-                    ? '指派后会将历史需求纳入待审核队列。'
-                    : '只有被指派的管理员可以执行需求审核。'}
-                </Text>
-                <Space.Compact style={{ width: '100%' }}>
-                  <Input
-                    value={reviewerAssignment}
-                    placeholder="输入审核人姓名"
-                    onChange={(event) => setReviewerAssignment(event.target.value)}
-                    onPressEnter={() => void assignReviewer()}
-                  />
-                  <Button
-                    type="primary"
-                    loading={assigningReviewer}
-                    disabled={!reviewerAssignment.trim()}
-                    onClick={() => void assignReviewer()}
-                  >
-                    {['new', 'reviewing'].includes(detailTarget.item.status) ? '指派并进入审核' : '保存指派'}
-                  </Button>
-                </Space.Compact>
+            <section className="requirement-detail-overview">
+              <div className="requirement-detail-heading">
+                <div>
+                  <Text type="secondary">需求主题</Text>
+                  <Title level={4}>{detailTarget.item.title}</Title>
+                </div>
+                <Space wrap>
+                  <AntTag color={detailTarget.item.urgency === 'high' ? 'red' : detailTarget.item.urgency === 'medium' ? 'gold' : 'blue'}>
+                    {labelOf(urgencyOptions, detailTarget.item.urgency)}优先级
+                  </AntTag>
+                  <AntTag color={detailTarget.item.status === 'pending_review' ? 'blue' : 'default'}>
+                    {labelOf(requirementStatusOptions, detailTarget.item.status)}
+                  </AntTag>
+                </Space>
               </div>
-            )}
-          </Card>
-          <Divider>AI 关联性分析</Divider>
-          <Button type="primary" icon={<SearchOutlined />} loading={aiMatchLoading} onClick={runAIMatching}>
-            分析匹配能力
-          </Button>
-          {aiMatchResult && (
-            <Space direction="vertical" size="middle" style={{ display: 'flex', marginTop: 16 }}>
-              {aiMatchResult.recommendations.map((recommendation) => (
-                <Card
-                  key={recommendation.project_id}
-                  size="small"
-                  title={`${recommendation.project.name} · ${recommendation.score.toFixed(0)} 分`}
-                  extra={capabilities.canCreateMatches ? (
+
+              <div className="requirement-meta-grid">
+                <div>
+                  <Text type="secondary">客户</Text>
+                  <Text strong>{detailTarget.item.customer}</Text>
+                </div>
+                <div>
+                  <Text type="secondary">联系人</Text>
+                  <Text strong>{detailTarget.item.contact || '未提供'}</Text>
+                </div>
+                <div>
+                  <Text type="secondary">提交时间</Text>
+                  <Text strong>{new Date(detailTarget.item.created_at).toLocaleString()}</Text>
+                </div>
+                <div>
+                  <Text type="secondary">标签</Text>
+                  {detailTarget.item.tags.length > 0 ? renderTags(detailTarget.item.tags) : <Text strong>暂无标签</Text>}
+                </div>
+              </div>
+
+              <div className="requirement-description-block">
+                <Text strong>需求描述</Text>
+                {isRequirementDescriptionIncomplete(detailTarget.item.description) ? (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    title="当前描述不足以支持审核"
+                    description={`原始内容：${detailTarget.item.description}。请补充业务场景、目标、数据来源和期望输出。`}
+                  />
+                ) : (
+                  <Text>{detailTarget.item.description}</Text>
+                )}
+              </div>
+
+              {requirementDataIssues.length > 0 && (
+                <Alert
+                  type="info"
+                  showIcon
+                  title="历史资料说明"
+                  description={`${requirementDataIssues.join('；')}。系统不会凭空推断缺失人员信息。`}
+                  action={capabilities.canEditRequirement ? (
+                    <Button size="small" onClick={() => openRequirementEditor(detailTarget.item)}>
+                      补充资料
+                    </Button>
+                  ) : undefined}
+                />
+              )}
+            </section>
+
+            <Space className="requirement-detail-actions" wrap>
+              {capabilities.canCreateRequirement && ['draft', 'new', 'reviewing'].includes(detailTarget.item.status) && (
+                <Button type="primary" onClick={() => changeRequirementStatus('pending_review')}>
+                  {detailTarget.item.status === 'draft' ? '重新提交审核' : '提交审核'}
+                </Button>
+              )}
+              {role === 'admin' && ['accepted', 'matching'].includes(detailTarget.item.status) && (
+                <Button danger onClick={() => changeRequirementStatus('shelved')}>
+                  搁置需求
+                </Button>
+              )}
+              {role === 'admin' && detailTarget.item.status === 'shelved' && (
+                <Button type="primary" onClick={() => changeRequirementStatus('accepted')}>
+                  恢复受理
+                </Button>
+              )}
+              {role === 'admin' && detailTarget.item.status === 'closed' && (
+                <Button onClick={() => changeRequirementStatus('shelved')}>
+                  迁移为已搁置
+                </Button>
+              )}
+            </Space>
+
+            <Card
+              size="small"
+              className="requirement-review-card"
+              title="审核流程"
+              extra={<AntTag color={detailTarget.item.reviewed_by ? 'green' : detailTarget.item.assigned_reviewer ? 'blue' : 'gold'}>
+                {detailTarget.item.reviewed_by ? '已审核' : detailTarget.item.assigned_reviewer ? '已指派' : '待指派'}
+              </AntTag>}
+            >
+              <div className="requirement-review-flow">
+                <div className="review-flow-item complete">
+                  <Text type="secondary">01 · 需求提交人</Text>
+                  <Text strong>{requirementReview?.submitter}</Text>
+                  <Text type="secondary">{new Date(detailTarget.item.created_at).toLocaleString()}</Text>
+                </div>
+                <div className={`review-flow-item ${detailTarget.item.assigned_reviewer ? 'complete' : ''}`}>
+                  <Text type="secondary">02 · 审核负责人</Text>
+                  <Text strong>{requirementReview?.assignee}</Text>
+                  <Text type="secondary">
+                    {detailTarget.item.assigned_reviewer ? '负责本次需求审核' : '等待管理员指派'}
+                  </Text>
+                </div>
+                <div className={`review-flow-item ${detailTarget.item.reviewed_by ? 'complete' : ''}`}>
+                  <Text type="secondary">03 · 实际审核人</Text>
+                  <Text strong>{requirementReview?.reviewer}</Text>
+                  <Text type="secondary">
+                    {detailTarget.item.reviewed_at
+                      ? new Date(detailTarget.item.reviewed_at).toLocaleString()
+                      : '审核完成后记录'}
+                  </Text>
+                </div>
+              </div>
+
+              <div className="review-note">
+                <Text type="secondary">审核意见</Text>
+                <Text>{requirementReview?.reviewNote}</Text>
+              </div>
+
+              {role === 'admin' && ['new', 'reviewing', 'pending_review'].includes(detailTarget.item.status) && (
+                <div className="reviewer-assignment">
+                  <div>
+                    <Text strong>指派审核负责人</Text>
+                    <Text type="secondary">
+                      {['new', 'reviewing'].includes(detailTarget.item.status)
+                        ? '指派后会将历史需求纳入待审核队列。'
+                        : '只有被指派的管理员可以执行需求审核。'}
+                    </Text>
+                  </div>
+                  <Space.Compact className="reviewer-assignment-control">
+                    <Input
+                      value={reviewerAssignment}
+                      placeholder="输入审核人姓名"
+                      onChange={(event) => setReviewerAssignment(event.target.value)}
+                      onPressEnter={() => void assignReviewer()}
+                    />
                     <Button
                       type="primary"
-                      size="small"
-                      disabled={recommendation.already_confirmed}
-                      onClick={() => confirmAIRecommendation(recommendation)}
+                      loading={assigningReviewer}
+                      disabled={!reviewerAssignment.trim()}
+                      onClick={() => void assignReviewer()}
                     >
-                      {recommendation.already_confirmed ? '已提交' : '发起技术确认'}
+                      {['new', 'reviewing'].includes(detailTarget.item.status) ? '指派并进入审核' : '保存指派'}
                     </Button>
-                  ) : null}
-                >
-                  <Space direction="vertical" size={6}>
-                    <AntTag color={recommendation.coverage_status === 'covered' ? 'green' : 'gold'}>
-                      {coverageLabel(recommendation.coverage_status)}
-                    </AntTag>
-                    <Text>{recommendation.reason}</Text>
-                    {recommendation.gaps.length > 0 && (
-                      <Text type="secondary">能力缺口：{recommendation.gaps.join('；')}</Text>
-                    )}
-                    <Text type="secondary">
-                      维度评分：{Object.entries(recommendation.dimensions).map(([key, value]) => `${key} ${value}`).join(' / ')}
-                    </Text>
-                  </Space>
-                </Card>
-              ))}
-              {aiMatchResult.recommendations.length === 0 && <Empty description="暂无合适候选能力" />}
-              <Text type="secondary">模型：{aiMatchResult.model}。AI 推荐需研发技术确认和管理员最终批准后才会正式生效。</Text>
-            </Space>
-          )}
-          <Divider>审核记录</Divider>
-          {reviewEvents.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无审核记录" />
-          ) : (
-            <div className="comment-list">
-              {reviewEvents.map((event) => (
-                <div className="comment-item" key={event.id}>
-                  <Space>
-                    <Text strong>{event.actor}</Text>
-                    <AntTag>{reviewActionLabel(event.action)}</AntTag>
-                    <Text type="secondary">{new Date(event.created_at).toLocaleString()}</Text>
-                  </Space>
-                  <div className="comment-content">
-                    {labelOf(requirementStatusOptions, event.from_status)} → {labelOf(requirementStatusOptions, event.to_status)}
-                    {event.note ? `；${event.note}` : ''}
-                  </div>
+                  </Space.Compact>
                 </div>
-              ))}
-            </div>
-          )}
+              )}
+            </Card>
+
+            <Card
+              size="small"
+              className="detail-section-card"
+              title="AI 能力匹配"
+              extra={(
+                <Button type="primary" icon={<SearchOutlined />} loading={aiMatchLoading} onClick={runAIMatching}>
+                  分析匹配能力
+                </Button>
+              )}
+            >
+              {!aiMatchResult && (
+                <Text type="secondary">基于需求内容分析候选能力；推荐结果仍需研发确认和管理员批准。</Text>
+              )}
+              {aiMatchResult && (
+                <Space direction="vertical" size="middle" style={{ display: 'flex' }}>
+                  {aiMatchResult.recommendations.map((recommendation) => (
+                    <Card
+                      key={recommendation.project_id}
+                      size="small"
+                      title={`${recommendation.project.name} · ${recommendation.score.toFixed(0)} 分`}
+                      extra={capabilities.canCreateMatches ? (
+                        <Button
+                          type="primary"
+                          size="small"
+                          disabled={recommendation.already_confirmed}
+                          onClick={() => confirmAIRecommendation(recommendation)}
+                        >
+                          {recommendation.already_confirmed ? '已提交' : '发起技术确认'}
+                        </Button>
+                      ) : null}
+                    >
+                      <Space direction="vertical" size={6}>
+                        <AntTag color={recommendation.coverage_status === 'covered' ? 'green' : 'gold'}>
+                          {coverageLabel(recommendation.coverage_status)}
+                        </AntTag>
+                        <Text>{recommendation.reason}</Text>
+                        {recommendation.gaps.length > 0 && (
+                          <Text type="secondary">能力缺口：{recommendation.gaps.join('；')}</Text>
+                        )}
+                        <Text type="secondary">
+                          维度评分：{Object.entries(recommendation.dimensions).map(([key, value]) => `${key} ${value}`).join(' / ')}
+                        </Text>
+                      </Space>
+                    </Card>
+                  ))}
+                  {aiMatchResult.recommendations.length === 0 && (
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未发现达到阈值的候选能力" />
+                  )}
+                  <Text type="secondary">模型：{aiMatchResult.model}</Text>
+                </Space>
+              )}
+            </Card>
+
+            <Card size="small" className="detail-section-card" title="审核记录">
+              {reviewEvents.length === 0 ? (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="尚未发生指派或审核操作"
+                />
+              ) : (
+                <div className="comment-list">
+                  {reviewEvents.map((event) => (
+                    <div className="comment-item" key={event.id}>
+                      <Space>
+                        <Text strong>{event.actor}</Text>
+                        <AntTag>{reviewActionLabel(event.action)}</AntTag>
+                        <Text type="secondary">{new Date(event.created_at).toLocaleString()}</Text>
+                      </Space>
+                      <div className="comment-content">
+                        {labelOf(requirementStatusOptions, event.from_status)} → {labelOf(requirementStatusOptions, event.to_status)}
+                        {event.note ? `；${event.note}` : ''}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
           </>
         )}
 
-        <Divider>关联列表</Divider>
-        {relatedMatches.length === 0 ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无关联" />
-        ) : (
-          <Table rowKey="id" columns={matchColumns} dataSource={relatedMatches} pagination={false} size="small" scroll={{ x: 640 }} />
-        )}
+        <Card
+          size="small"
+          className="detail-section-card"
+          title={detailTarget?.type === 'requirement' ? '已关联能力' : '已关联需求'}
+          extra={<AntTag>{relatedMatches.length} 项</AntTag>}
+        >
+          {relatedMatches.length === 0 ? (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={detailTarget?.type === 'requirement' ? '尚未建立能力关联' : '尚未建立需求关联'}
+            />
+          ) : (
+            <Table rowKey="id" columns={matchColumns} dataSource={relatedMatches} pagination={false} size="small" scroll={{ x: 640 }} />
+          )}
+        </Card>
 
-        <Divider>协作记录</Divider>
-        <Form form={commentForm} layout="vertical" onFinish={submitComment} className="comment-form">
-          <Form.Item name="author" label="姓名/角色" rules={[{ required: true, message: '请输入姓名或角色' }]}>
-            <Input placeholder="例如：销售一组" />
-          </Form.Item>
-          <Form.Item name="content" label="评论" rules={[{ required: true, message: '请输入评论内容' }]}>
-            <TextArea rows={3} />
-          </Form.Item>
-          <Button type="primary" htmlType="submit" icon={<PlusOutlined />}>
-            添加评论
-          </Button>
-        </Form>
+        <Card size="small" className="detail-section-card collaboration-card" title="协作记录">
+          <div className="collaboration-layout">
+            <div className="collaboration-history">
+              {commentsLoading && <Text type="secondary">评论加载中...</Text>}
+              {!commentsLoading && comments.length === 0 && (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无协作留言" />
+              )}
+              {!commentsLoading &&
+                comments.map((comment) => (
+                  <div className="comment-item" key={comment.id}>
+                    <Space>
+                      <Text strong>{comment.author}</Text>
+                      <Text type="secondary">{new Date(comment.created_at).toLocaleString()}</Text>
+                    </Space>
+                    <div className="comment-content">{comment.content}</div>
+                  </div>
+                ))}
+            </div>
 
-        <div className="comment-list">
-          {commentsLoading && <Text type="secondary">评论加载中...</Text>}
-          {!commentsLoading && comments.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无评论" />}
-          {!commentsLoading &&
-            comments.map((comment) => (
-              <div className="comment-item" key={comment.id}>
-                <Space>
-                  <Text strong>{comment.author}</Text>
-                  <Text type="secondary">{new Date(comment.created_at).toLocaleString()}</Text>
-                </Space>
-                <div className="comment-content">{comment.content}</div>
-              </div>
-            ))}
-        </div>
+            <Form form={commentForm} layout="vertical" onFinish={submitComment} className="comment-form">
+              <Form.Item name="author" label="参与人" rules={[{ required: true, message: '请输入姓名或角色' }]}>
+                <Input placeholder="当前使用人" />
+              </Form.Item>
+              <Form.Item name="content" label="添加留言" rules={[{ required: true, message: '请输入评论内容' }]}>
+                <TextArea rows={3} placeholder="补充进展、问题或需要协同的事项" />
+              </Form.Item>
+              <Button type="primary" htmlType="submit" icon={<PlusOutlined />}>
+                添加留言
+              </Button>
+            </Form>
+          </div>
+        </Card>
       </Drawer>
 
       <Drawer
@@ -1430,7 +1559,7 @@ export default function WorkbenchPage() {
           <Form.Item name="tag_ids" label="标签">
             <Select mode="multiple" options={tagOptions} />
           </Form.Item>
-          <Form.Item name="description" label="描述" rules={[{ required: true, message: '请输入需求描述' }]}>
+          <Form.Item name="description" label="描述" rules={requirementDescriptionRules}>
             <TextArea rows={4} />
           </Form.Item>
           <Button type="primary" htmlType="submit" block>

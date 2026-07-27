@@ -41,10 +41,11 @@ def test_ai_matching_ranks_candidates_and_can_be_confirmed(monkeypatch):
         json={
             "title": "降低数据中心 PUE",
             "description": "客户需要分析能耗并获得节能优化建议。",
-            "customer": "客户 A",
-            "urgency": "high",
-            "status": "new",
-            "tag_ids": [tag["id"]],
+                "customer": "客户 A",
+                "urgency": "high",
+                "status": "new",
+                "submitted_by": "测试销售",
+                "tag_ids": [tag["id"]],
         },
     ).json()
 

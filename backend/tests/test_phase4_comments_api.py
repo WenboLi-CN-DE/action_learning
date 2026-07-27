@@ -41,10 +41,11 @@ def test_create_and_list_requirement_comments():
         "/api/v1/requirements",
         json={
             "title": "评论需求",
-            "description": "客户需要补充说明",
+            "description": "客户需要补充现场业务场景和边界条件说明。",
             "customer": "测试客户",
             "urgency": "medium",
             "status": "new",
+            "submitted_by": "测试销售",
             "tag_ids": [],
         },
     ).json()

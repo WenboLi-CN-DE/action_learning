@@ -42,6 +42,36 @@ def _create_project():
     ).json()
 
 
+def test_new_requirement_requires_submitter_and_meaningful_description():
+    base_payload = {
+        "title": "变压器数据自动整理需求",
+        "description": "客户希望自动读取变压器数据并生成结构化表格。",
+        "customer": "齐鲁制药",
+        "contact": "王艳",
+        "urgency": "medium",
+        "status": "pending_review",
+        "tag_ids": [],
+    }
+
+    missing_submitter = client.post(
+        "/api/v1/requirements",
+        json=base_payload,
+    )
+    assert missing_submitter.status_code == 400
+    assert "提交人" in missing_submitter.json()["detail"]
+
+    placeholder_description = client.post(
+        "/api/v1/requirements",
+        json={
+            **base_payload,
+            "description": "具体可以联系",
+            "submitted_by": "张销售",
+        },
+    )
+    assert placeholder_description.status_code == 400
+    assert "需求描述" in placeholder_description.json()["detail"]
+
+
 def test_admin_can_approve_pending_requirement_and_audit_is_visible():
     requirement = _create_requirement()
 
@@ -336,6 +366,7 @@ def test_legacy_new_requirement_can_enter_the_review_workflow():
             "description": "兼容旧版 new 状态进入审核流程。",
             "customer": "历史客户",
             "status": "new",
+            "submitted_by": "张销售",
             "tag_ids": [],
         },
     ).json()

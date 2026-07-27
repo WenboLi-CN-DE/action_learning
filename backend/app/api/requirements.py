@@ -22,6 +22,21 @@ from app.schemas import (
 )
 
 router = APIRouter(prefix="/requirements", tags=["requirements"])
+PLACEHOLDER_DESCRIPTIONS = {"具体可以联系", "具体可联系", "后续联系", "待补充"}
+
+
+def validate_requirement_identity_and_description(
+    submitted_by: str | None,
+    description: str,
+) -> tuple[str, str]:
+    submitter = (submitted_by or "").strip()
+    if not submitter:
+        raise HTTPException(status_code=400, detail="需求提交人不能为空")
+
+    normalized_description = description.strip()
+    if len(normalized_description) < 10 or normalized_description in PLACEHOLDER_DESCRIPTIONS:
+        raise HTTPException(status_code=400, detail="需求描述信息不足，请说明业务场景、目标或期望结果")
+    return submitter, normalized_description
 
 
 @router.get("", response_model=list[RequirementRead])
@@ -36,15 +51,19 @@ def create_requirement(payload: RequirementCreate, session: Session = Depends(ge
             status_code=status.HTTP_409_CONFLICT,
             detail="新需求只能创建为草稿、待审核或兼容旧版的新需求状态",
         )
+    submitter, description = validate_requirement_identity_and_description(
+        payload.submitted_by,
+        payload.description,
+    )
     tags = load_tags(session, payload.tag_ids)
     requirement = Requirement(
         title=payload.title,
-        description=payload.description,
+        description=description,
         customer=payload.customer,
         contact=payload.contact,
         urgency=payload.urgency,
         status=payload.status,
-        submitted_by=payload.submitted_by,
+        submitted_by=submitter,
         tags=tags,
     )
     session.add(requirement)
@@ -297,6 +316,11 @@ def update_requirement(
         raise HTTPException(status_code=404, detail="Requirement not found")
 
     updates = payload.model_dump(exclude_unset=True)
+    if "description" in updates:
+        normalized_description = str(updates["description"] or "").strip()
+        if len(normalized_description) < 10 or normalized_description in PLACEHOLDER_DESCRIPTIONS:
+            raise HTTPException(status_code=400, detail="需求描述信息不足，请说明业务场景、目标或期望结果")
+        updates["description"] = normalized_description
     requested_status = updates.get("status")
     if requested_status is not None and requested_status != requirement.status:
         raise HTTPException(
