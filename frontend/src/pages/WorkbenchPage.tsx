@@ -846,8 +846,8 @@ export default function WorkbenchPage() {
               key: 'projects',
               label: '能力池',
               children: (
-                <div className={`workbench-grid${capabilities.canManageProjects ? '' : ' read-only'}`}>
-                  {capabilities.canManageProjects && <section className="form-panel">
+                <div className={`workbench-grid creation-workbench${capabilities.canManageProjects ? '' : ' read-only'}`}>
+                  {capabilities.canManageProjects && <section className="form-panel creation-form-panel">
                     <Title level={4}>新建能力</Title>
                     <AIStructurePanel
                       title="AI 结构化能力描述"
@@ -902,8 +902,8 @@ export default function WorkbenchPage() {
               key: 'requirements',
               label: '需求池',
               children: (
-                <div className={`workbench-grid requirements-workbench${capabilities.canCreateRequirement ? '' : ' read-only'}`}>
-                  {capabilities.canCreateRequirement && <section className="form-panel requirement-form-panel">
+                <div className={`workbench-grid creation-workbench${capabilities.canCreateRequirement ? '' : ' read-only'}`}>
+                  {capabilities.canCreateRequirement && <section className="form-panel creation-form-panel">
                     <Title level={4}>新建需求</Title>
                     <AIStructurePanel
                       title="AI 结构化需求描述"

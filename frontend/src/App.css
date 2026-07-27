@@ -277,14 +277,14 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
-.requirements-workbench {
+.creation-workbench {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 28px;
 }
 
-.requirements-workbench .requirement-form-panel {
+.creation-workbench .creation-form-panel {
   width: min(720px, 100%);
   border-color: #b8e6c1;
   box-shadow:
@@ -292,12 +292,12 @@
     0 12px 30px rgba(10, 47, 36, 0.1);
 }
 
-.requirements-workbench .requirement-form-panel h4.ant-typography {
+.creation-workbench .creation-form-panel h4.ant-typography {
   text-align: center;
   font-size: 22px;
 }
 
-.requirements-workbench .table-panel {
+.creation-workbench .table-panel {
   width: 100%;
 }
 
