@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Button,
+  Card,
   Descriptions,
   Divider,
   Drawer,
@@ -20,8 +21,9 @@ import {
   message,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { EditOutlined, EyeOutlined, LinkOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons'
+import { EditOutlined, EyeOutlined, LinkOutlined, LogoutOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons'
 import {
+  analyzeRequirementMatches,
   createComment,
   createMatch,
   createProject,
@@ -32,16 +34,19 @@ import {
   fetchMatches,
   fetchProjects,
   fetchRequirements,
+  fetchReviewEvents,
   fetchTags,
   recognizeImage,
   structureProject,
   structureRequirement,
+  transitionRequirement,
   updateProject,
   updateRequirement,
 } from '../services/api'
 import { clearLLMSettings, loadLLMSettings, saveLLMSettings } from '../services/llmSettings'
 import { useNavigate } from 'react-router'
 import type {
+  AIMatchResult,
   CommentItem,
   CommentPayload,
   LLMSettings,
@@ -53,6 +58,7 @@ import type {
   ProjectPayload,
   RequirementItem,
   RequirementPayload,
+  ReviewEventItem,
   TagItem,
   TagPayload,
 } from '../types'
@@ -66,6 +72,10 @@ import {
   normalizeUrgency,
 } from './aiStructureMapping'
 import { buildDashboardStats, filterDashboardDataByTag } from './dashboardStats'
+import ReviewQueue from './ReviewQueue'
+import { getRoleCapabilities, ROLE_LABELS } from '../auth/permissions'
+import { useRoleStore } from '../auth/roleStore'
+import { useAssistantStore } from '../stores/assistantStore'
 import schneiderLogo from '../assets/schneider-electric-cn-logo.png'
 
 const { Header, Content } = Layout
@@ -80,10 +90,15 @@ const projectStatusOptions = [
 ]
 
 const requirementStatusOptions = [
-  { label: '新需求', value: 'new' },
-  { label: '评估中', value: 'reviewing' },
+  { label: '草稿', value: 'draft' },
+  { label: '待审核', value: 'pending_review' },
+  { label: '已受理', value: 'accepted' },
+  { label: '匹配中', value: 'matching' },
   { label: '已匹配', value: 'matched' },
-  { label: '关闭', value: 'closed' },
+  { label: '已搁置', value: 'shelved' },
+  { label: '新需求（历史）', value: 'new' },
+  { label: '评估中（历史）', value: 'reviewing' },
+  { label: '关闭（历史）', value: 'closed' },
 ]
 
 const urgencyOptions = [
@@ -122,15 +137,34 @@ function labelOf(options: { label: string; value: string }[], value: string) {
   return options.find((option) => option.value === value)?.label ?? value
 }
 
+function reviewActionLabel(action: string) {
+  const labels: Record<string, string> = {
+    approve: '受理',
+    return: '退回',
+    transition: '状态变更',
+    match_approved: '匹配确认',
+    match_rejected: '匹配拒绝',
+  }
+  return labels[action] ?? action
+}
+
 type DetailTarget = { type: 'project'; item: ProjectItem } | { type: 'requirement'; item: RequirementItem }
 
 export default function WorkbenchPage() {
   const navigate = useNavigate()
+  const role = useRoleStore((state) => state.role) ?? 'sales'
+  const displayName = useRoleStore((state) => state.displayName)
+  const clearIdentity = useRoleStore((state) => state.clearIdentity)
+  const requirementDraft = useAssistantStore((state) => state.requirementDraft)
+  const clearRequirementDraft = useAssistantStore((state) => state.clearRequirementDraft)
+  const capabilities = getRoleCapabilities(role)
+  const [activeTab, setActiveTab] = useState<string>(capabilities.defaultTab)
   const [projects, setProjects] = useState<ProjectItem[]>([])
   const [requirements, setRequirements] = useState<RequirementItem[]>([])
   const [tags, setTags] = useState<TagItem[]>([])
   const [matches, setMatches] = useState<MatchItem[]>([])
   const [comments, setComments] = useState<CommentItem[]>([])
+  const [reviewEvents, setReviewEvents] = useState<ReviewEventItem[]>([])
   const [detailTarget, setDetailTarget] = useState<DetailTarget | null>(null)
   const [editingProject, setEditingProject] = useState<ProjectItem | null>(null)
   const [editingRequirement, setEditingRequirement] = useState<RequirementItem | null>(null)
@@ -148,6 +182,8 @@ export default function WorkbenchPage() {
   const [requirementAIError, setRequirementAIError] = useState<string | null>(null)
   const [projectAILoading, setProjectAILoading] = useState(false)
   const [requirementAILoading, setRequirementAILoading] = useState(false)
+  const [aiMatchResult, setAIMatchResult] = useState<AIMatchResult | null>(null)
+  const [aiMatchLoading, setAIMatchLoading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [commentsLoading, setCommentsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -160,6 +196,36 @@ export default function WorkbenchPage() {
   const [editProjectForm] = Form.useForm<ProjectPayload>()
   const [editRequirementForm] = Form.useForm<RequirementPayload>()
   const [llmSettingsForm] = Form.useForm<LLMSettings>()
+
+  useEffect(() => {
+    if (!requirementDraft || !capabilities.canCreateRequirement) return
+    let active = true
+    Promise.resolve().then(() => {
+      if (!active) return
+      setActiveTab('requirements')
+      setRequirementAIResult(requirementDraft)
+      requirementForm.setFieldsValue({
+        title: getFieldValue(requirementDraft.fields, 'title'),
+        customer: getFieldValue(requirementDraft.fields, 'customer'),
+        contact: getFieldValue(requirementDraft.fields, 'contact'),
+        urgency: normalizeUrgency(requirementDraft.fields.urgency),
+        status: role === 'sales' ? 'pending_review' : normalizeRequirementStatus(requirementDraft.fields.status),
+        description: buildRequirementDescription(requirementDraft),
+      })
+      clearRequirementDraft()
+      messageApi.info('AI 助手生成的需求草稿已填入表单，请检查后提交')
+    })
+    return () => {
+      active = false
+    }
+  }, [
+    capabilities.canCreateRequirement,
+    clearRequirementDraft,
+    messageApi,
+    requirementDraft,
+    requirementForm,
+    role,
+  ])
 
   const tagOptions = useMemo(
     () => tags.map((tag) => ({ label: `${tag.name} / ${labelOf(tagCategoryOptions, tag.category)}`, value: tag.id })),
@@ -203,9 +269,12 @@ export default function WorkbenchPage() {
   }, [projects, selectedProjectTagId])
 
   const filteredRequirements = useMemo(() => {
-    if (selectedRequirementTagId === null) return requirements
-    return requirements.filter((requirement) => requirement.tags.some((tag) => tag.id === selectedRequirementTagId))
-  }, [requirements, selectedRequirementTagId])
+    const roleFiltered = role === 'sales'
+      ? requirements.filter((requirement) => !requirement.submitted_by || requirement.submitted_by === displayName)
+      : requirements
+    if (selectedRequirementTagId === null) return roleFiltered
+    return roleFiltered.filter((requirement) => requirement.tags.some((tag) => tag.id === selectedRequirementTagId))
+  }, [displayName, requirements, role, selectedRequirementTagId])
 
   const relatedMatches = useMemo(() => {
     if (detailTarget === null) return []
@@ -262,7 +331,12 @@ export default function WorkbenchPage() {
   }
 
   async function submitRequirement(values: RequirementPayload) {
-    await createRequirement({ ...values, tag_ids: values.tag_ids ?? [] })
+    await createRequirement({
+      ...values,
+      status: role === 'sales' ? 'pending_review' : values.status,
+      submitted_by: displayName,
+      tag_ids: values.tag_ids ?? [],
+    })
     requirementForm.resetFields()
     await loadData()
     messageApi.success('需求已创建')
@@ -276,7 +350,7 @@ export default function WorkbenchPage() {
   }
 
   async function submitMatch(values: MatchPayload) {
-    await createMatch(values)
+    await createMatch({ ...values, created_by: displayName })
     matchForm.resetFields()
     await loadData()
     messageApi.success('匹配已保存')
@@ -395,8 +469,71 @@ export default function WorkbenchPage() {
 
   async function openDetail(target: DetailTarget) {
     setDetailTarget(target)
+    setAIMatchResult(null)
+    setReviewEvents([])
     commentForm.resetFields()
-    await loadComments(target)
+    await Promise.all([
+      loadComments(target),
+      target.type === 'requirement'
+        ? fetchReviewEvents('requirement', target.item.id)
+            .then(setReviewEvents)
+            .catch(() => setReviewEvents([]))
+        : Promise.resolve(),
+    ])
+  }
+
+  async function runAIMatching() {
+    if (detailTarget?.type !== 'requirement') return
+    setAIMatchLoading(true)
+    try {
+      const result = await analyzeRequirementMatches(detailTarget.item.id, 5, llmSettings)
+      setAIMatchResult(result)
+      if (result.recommendations.length === 0) messageApi.info('AI 未发现达到阈值的候选能力')
+    } catch (err) {
+      messageApi.error(err instanceof Error ? err.message : 'AI 匹配分析失败')
+    } finally {
+      setAIMatchLoading(false)
+    }
+  }
+
+  async function changeRequirementStatus(targetStatus: string) {
+    if (detailTarget?.type !== 'requirement') return
+    try {
+      const updated = await transitionRequirement(detailTarget.item.id, {
+        target_status: targetStatus,
+        actor: displayName,
+      })
+      setDetailTarget({ type: 'requirement', item: updated })
+      setReviewEvents(await fetchReviewEvents('requirement', updated.id))
+      await loadData()
+      messageApi.success(targetStatus === 'pending_review' ? '需求已重新提交审核' : '需求状态已更新')
+    } catch (requestError) {
+      messageApi.error(requestError instanceof Error ? requestError.message : '需求状态更新失败')
+    }
+  }
+
+  async function confirmAIRecommendation(recommendation: AIMatchResult['recommendations'][number]) {
+    if (detailTarget?.type !== 'requirement') return
+    await createMatch({
+      project_id: recommendation.project_id,
+      requirement_id: detailTarget.item.id,
+      coverage_status: recommendation.coverage_status,
+      note: recommendation.reason,
+      source: 'ai',
+      ai_score: recommendation.score,
+      ai_reason: recommendation.reason,
+      ai_gaps: recommendation.gaps,
+      ai_model: aiMatchResult?.model,
+      created_by: displayName,
+    })
+    setAIMatchResult((current) => current ? {
+      ...current,
+      recommendations: current.recommendations.map((item) =>
+        item.project_id === recommendation.project_id ? { ...item, already_confirmed: true } : item,
+      ),
+    } : current)
+    await loadData()
+    messageApi.success('AI 推荐已提交，等待研发或管理员确认')
   }
 
   async function submitComment(values: Pick<CommentPayload, 'author' | 'content'>) {
@@ -475,9 +612,11 @@ export default function WorkbenchPage() {
           <Button size="small" icon={<EyeOutlined />} onClick={() => openDetail({ type: 'project', item: record })}>
             详情
           </Button>
-          <Button size="small" icon={<EditOutlined />} onClick={() => openProjectEditor(record)}>
-            编辑
-          </Button>
+          {capabilities.canManageProjects && (
+            <Button size="small" icon={<EditOutlined />} onClick={() => openProjectEditor(record)}>
+              编辑
+            </Button>
+          )}
         </Space>
       ),
     },
@@ -510,9 +649,11 @@ export default function WorkbenchPage() {
           <Button size="small" icon={<EyeOutlined />} onClick={() => openDetail({ type: 'requirement', item: record })}>
             详情
           </Button>
-          <Button size="small" icon={<EditOutlined />} onClick={() => openRequirementEditor(record)}>
-            编辑
-          </Button>
+          {capabilities.canEditRequirement && (
+            <Button size="small" icon={<EditOutlined />} onClick={() => openRequirementEditor(record)}>
+              编辑
+            </Button>
+          )}
         </Space>
       ),
     },
@@ -538,6 +679,26 @@ export default function WorkbenchPage() {
       width: 120,
       render: (value: string) => <AntTag color={value === 'covered' ? 'green' : value === 'partial' ? 'gold' : 'red'}>{labelOf(coverageOptions, value)}</AntTag>,
     },
+    {
+      title: '确认状态',
+      dataIndex: 'review_status',
+      key: 'review_status',
+      width: 110,
+      render: (value: MatchItem['review_status']) => (
+        <AntTag color={value === 'approved' ? 'green' : value === 'rejected' ? 'red' : 'blue'}>
+          {value === 'approved' ? '已确认' : value === 'rejected' ? '已拒绝' : '待确认'}
+        </AntTag>
+      ),
+    },
+    {
+      title: '审核人',
+      dataIndex: 'reviewed_by',
+      key: 'reviewed_by',
+      width: 130,
+      render: (value: string | null, record) => value
+        ? `${value}${record.reviewed_at ? ` · ${new Date(record.reviewed_at).toLocaleDateString()}` : ''}`
+        : '-',
+    },
     { title: '备注', dataIndex: 'note', key: 'note', ellipsis: true },
   ]
 
@@ -545,6 +706,11 @@ export default function WorkbenchPage() {
   const coverageColor = (status: string) => (status === 'covered' ? '#3dcd58' : status === 'partial' ? '#d9a300' : '#d9363e')
   const detailTitle = detailTarget?.type === 'project' ? detailTarget.item.name : detailTarget?.item.title
   const detailTypeLabel = detailTarget?.type === 'project' ? '能力详情' : '需求详情'
+  const visibleTabKeys = role === 'admin'
+    ? ['dashboard', 'projects', 'requirements', 'reviews', 'tags', 'matches']
+    : role === 'research'
+      ? ['projects', 'requirements', 'reviews', 'matches']
+      : ['requirements', 'projects']
 
   return (
     <Layout className="app-shell">
@@ -562,6 +728,7 @@ export default function WorkbenchPage() {
         </div>
         <Space className="header-actions">
           <span className="environment-pill">MVP</span>
+          <span className="identity-pill">{displayName} · {ROLE_LABELS[role]}</span>
           <Button type="primary" icon={<SearchOutlined />} onClick={() => navigate('/search')}>
             智能搜索
           </Button>
@@ -570,6 +737,15 @@ export default function WorkbenchPage() {
           </Button>
           <Button icon={<ReloadOutlined />} onClick={loadData} loading={loading}>
             刷新
+          </Button>
+          <Button
+            icon={<LogoutOutlined />}
+            onClick={() => {
+              clearIdentity()
+              navigate('/role')
+            }}
+          >
+            切换身份
           </Button>
         </Space>
       </Header>
@@ -594,6 +770,8 @@ export default function WorkbenchPage() {
 
         <Tabs
           className="workbench-tabs"
+          activeKey={activeTab}
+          onChange={setActiveTab}
           items={[
             {
               key: 'dashboard',
@@ -668,8 +846,8 @@ export default function WorkbenchPage() {
               key: 'projects',
               label: '能力池',
               children: (
-                <div className="workbench-grid">
-                  <section className="form-panel">
+                <div className={`workbench-grid${capabilities.canManageProjects ? '' : ' read-only'}`}>
+                  {capabilities.canManageProjects && <section className="form-panel">
                     <Title level={4}>新建能力</Title>
                     <AIStructurePanel
                       title="AI 结构化能力描述"
@@ -703,7 +881,7 @@ export default function WorkbenchPage() {
                         创建
                       </Button>
                     </Form>
-                  </section>
+                  </section>}
                   <section className="table-panel">
                     <div className="table-toolbar">
                       <Select
@@ -724,8 +902,8 @@ export default function WorkbenchPage() {
               key: 'requirements',
               label: '需求池',
               children: (
-                <div className="workbench-grid">
-                  <section className="form-panel">
+                <div className={`workbench-grid${capabilities.canCreateRequirement ? '' : ' read-only'}`}>
+                  {capabilities.canCreateRequirement && <section className="form-panel">
                     <Title level={4}>新建需求</Title>
                     <AIStructurePanel
                       title="AI 结构化需求描述"
@@ -739,7 +917,7 @@ export default function WorkbenchPage() {
                       onApply={applyRequirementAIResult}
                       onImageRecognize={recognizeRequirementImage}
                     />
-                    <Form form={requirementForm} layout="vertical" onFinish={submitRequirement} initialValues={{ urgency: 'medium', status: 'new', tag_ids: [] }}>
+                    <Form form={requirementForm} layout="vertical" onFinish={submitRequirement} initialValues={{ urgency: 'medium', status: 'pending_review', tag_ids: [] }}>
                       <Form.Item name="title" label="需求标题" rules={[{ required: true, message: '请输入需求标题' }]}>
                         <Input />
                       </Form.Item>
@@ -752,9 +930,13 @@ export default function WorkbenchPage() {
                       <Form.Item name="urgency" label="紧急度">
                         <Select options={urgencyOptions} />
                       </Form.Item>
-                      <Form.Item name="status" label="状态">
-                        <Select options={requirementStatusOptions} />
-                      </Form.Item>
+                      {role === 'admin' ? (
+                        <Form.Item name="status" label="状态">
+                          <Select options={requirementStatusOptions.filter((option) => !option.label.includes('历史'))} />
+                        </Form.Item>
+                      ) : (
+                        <Form.Item name="status" hidden><Input /></Form.Item>
+                      )}
                       <Form.Item name="tag_ids" label="标签">
                         <Select mode="multiple" options={tagOptions} />
                       </Form.Item>
@@ -765,7 +947,7 @@ export default function WorkbenchPage() {
                         创建
                       </Button>
                     </Form>
-                  </section>
+                  </section>}
                   <section className="table-panel">
                     <div className="table-toolbar">
                       <Select
@@ -777,9 +959,62 @@ export default function WorkbenchPage() {
                         onChange={(value?: number) => setSelectedRequirementTagId(value ?? null)}
                       />
                     </div>
-                    <Table rowKey="id" columns={requirementColumns} dataSource={filteredRequirements} loading={loading} pagination={false} scroll={{ x: 920 }} />
+                    {role === 'sales' ? (
+                      <div className="sales-requirement-grid">
+                        {filteredRequirements.map((requirement) => {
+                          const requirementMatches = matches.filter((item) => item.requirement_id === requirement.id)
+                          const approvedMatches = requirementMatches.filter((item) => item.review_status === 'approved')
+                          const pendingMatches = requirementMatches.filter((item) => item.review_status === 'pending')
+                          const progress = approvedMatches.length > 0 ? 100 : pendingMatches.length > 0 ? 65 : requirement.status === 'accepted' ? 35 : 15
+                          return (
+                            <Card
+                              key={requirement.id}
+                              title={requirement.title}
+                              extra={<AntTag>{labelOf(requirementStatusOptions, requirement.status)}</AntTag>}
+                              actions={[
+                                <Button key="details" type="link" icon={<EyeOutlined />} onClick={() => openDetail({ type: 'requirement', item: requirement })}>
+                                  查看详情
+                                </Button>,
+                                <Button key="edit" type="link" icon={<EditOutlined />} onClick={() => openRequirementEditor(requirement)}>
+                                  编辑需求
+                                </Button>,
+                              ]}
+                            >
+                              <Space orientation="vertical" size="small" style={{ display: 'flex' }}>
+                                <Text type="secondary">{requirement.customer}</Text>
+                                <Progress percent={progress} size="small" strokeColor="#3dcd58" />
+                                <Text>
+                                  {approvedMatches.length > 0
+                                    ? `已确认能力：${approvedMatches.map((item) => item.project.name).join('、')}`
+                                    : pendingMatches.length > 0
+                                      ? `${pendingMatches.length} 个匹配正在等待确认`
+                                      : '尚未进入能力匹配'}
+                                </Text>
+                                {renderTags(requirement.tags)}
+                              </Space>
+                            </Card>
+                          )
+                        })}
+                        {filteredRequirements.length === 0 && <Empty description="暂无我的需求" />}
+                      </div>
+                    ) : (
+                      <Table rowKey="id" columns={requirementColumns} dataSource={filteredRequirements} loading={loading} pagination={false} scroll={{ x: 920 }} />
+                    )}
                   </section>
                 </div>
+              ),
+            },
+            {
+              key: 'reviews',
+              label: '审核队列',
+              children: (
+                <ReviewQueue
+                  requirements={requirements}
+                  matches={matches}
+                  reviewer={displayName}
+                  canReviewRequirements={capabilities.canReviewRequirements}
+                  onReviewed={loadData}
+                />
               ),
             },
             {
@@ -838,7 +1073,7 @@ export default function WorkbenchPage() {
                 </div>
               ),
             },
-          ]}
+          ].filter((item) => visibleTabKeys.includes(item.key))}
         />
       </Content>
 
@@ -876,6 +1111,7 @@ export default function WorkbenchPage() {
         onClose={() => {
           setDetailTarget(null)
           setComments([])
+          setReviewEvents([])
         }}
       >
         {detailTarget?.type === 'project' && (
@@ -889,6 +1125,7 @@ export default function WorkbenchPage() {
         )}
 
         {detailTarget?.type === 'requirement' && (
+          <>
           <Descriptions bordered column={1} size="small">
             <Descriptions.Item label="需求标题">{detailTarget.item.title}</Descriptions.Item>
             <Descriptions.Item label="客户">{detailTarget.item.customer}</Descriptions.Item>
@@ -898,6 +1135,89 @@ export default function WorkbenchPage() {
             <Descriptions.Item label="标签">{renderTags(detailTarget.item.tags)}</Descriptions.Item>
             <Descriptions.Item label="描述">{detailTarget.item.description}</Descriptions.Item>
           </Descriptions>
+          <Space style={{ marginTop: 12 }}>
+            {capabilities.canCreateRequirement && ['draft', 'new', 'reviewing'].includes(detailTarget.item.status) && (
+              <Button type="primary" onClick={() => changeRequirementStatus('pending_review')}>
+                {detailTarget.item.status === 'draft' ? '重新提交审核' : '提交审核'}
+              </Button>
+            )}
+            {role === 'admin' && ['accepted', 'matching'].includes(detailTarget.item.status) && (
+              <Button danger onClick={() => changeRequirementStatus('shelved')}>
+                搁置需求
+              </Button>
+            )}
+            {role === 'admin' && detailTarget.item.status === 'shelved' && (
+              <Button type="primary" onClick={() => changeRequirementStatus('accepted')}>
+                恢复受理
+              </Button>
+            )}
+            {role === 'admin' && detailTarget.item.status === 'closed' && (
+              <Button onClick={() => changeRequirementStatus('shelved')}>
+                迁移为已搁置
+              </Button>
+            )}
+          </Space>
+          <Divider>AI 关联性分析</Divider>
+          <Button type="primary" icon={<SearchOutlined />} loading={aiMatchLoading} onClick={runAIMatching}>
+            分析匹配能力
+          </Button>
+          {aiMatchResult && (
+            <Space direction="vertical" size="middle" style={{ display: 'flex', marginTop: 16 }}>
+              {aiMatchResult.recommendations.map((recommendation) => (
+                <Card
+                  key={recommendation.project_id}
+                  size="small"
+                  title={`${recommendation.project.name} · ${recommendation.score.toFixed(0)} 分`}
+                  extra={capabilities.canReviewMatches ? (
+                    <Button
+                      type="primary"
+                      size="small"
+                      disabled={recommendation.already_confirmed}
+                      onClick={() => confirmAIRecommendation(recommendation)}
+                    >
+                      {recommendation.already_confirmed ? '已提交' : '提交匹配'}
+                    </Button>
+                  ) : null}
+                >
+                  <Space direction="vertical" size={6}>
+                    <AntTag color={recommendation.coverage_status === 'covered' ? 'green' : 'gold'}>
+                      {coverageLabel(recommendation.coverage_status)}
+                    </AntTag>
+                    <Text>{recommendation.reason}</Text>
+                    {recommendation.gaps.length > 0 && (
+                      <Text type="secondary">能力缺口：{recommendation.gaps.join('；')}</Text>
+                    )}
+                    <Text type="secondary">
+                      维度评分：{Object.entries(recommendation.dimensions).map(([key, value]) => `${key} ${value}`).join(' / ')}
+                    </Text>
+                  </Space>
+                </Card>
+              ))}
+              {aiMatchResult.recommendations.length === 0 && <Empty description="暂无合适候选能力" />}
+              <Text type="secondary">模型：{aiMatchResult.model}。AI 推荐需人工确认后才会成为正式关联。</Text>
+            </Space>
+          )}
+          <Divider>审核记录</Divider>
+          {reviewEvents.length === 0 ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无审核记录" />
+          ) : (
+            <div className="comment-list">
+              {reviewEvents.map((event) => (
+                <div className="comment-item" key={event.id}>
+                  <Space>
+                    <Text strong>{event.actor}</Text>
+                    <AntTag>{reviewActionLabel(event.action)}</AntTag>
+                    <Text type="secondary">{new Date(event.created_at).toLocaleString()}</Text>
+                  </Space>
+                  <div className="comment-content">
+                    {labelOf(requirementStatusOptions, event.from_status)} → {labelOf(requirementStatusOptions, event.to_status)}
+                    {event.note ? `；${event.note}` : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          </>
         )}
 
         <Divider>关联列表</Divider>
@@ -990,7 +1310,7 @@ export default function WorkbenchPage() {
             <Select options={urgencyOptions} />
           </Form.Item>
           <Form.Item name="status" label="状态">
-            <Select options={requirementStatusOptions} />
+            <Select options={requirementStatusOptions} disabled />
           </Form.Item>
           <Form.Item name="tag_ids" label="标签">
             <Select mode="multiple" options={tagOptions} />

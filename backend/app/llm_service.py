@@ -153,3 +153,79 @@ def call_qwen_for_image_recognition(
     )
     response.raise_for_status()
     return str(response.json()["choices"][0]["message"]["content"]).strip()
+
+
+def call_qwen_for_matching(
+    *, requirement_context: str, candidates: list[dict[str, Any]],
+    api_key: str, model: str, base_url: str,
+) -> dict[str, Any]:
+    system = (
+        "你是施耐德电气内部需求与能力匹配分析专家。只评估提供的候选能力，禁止编造能力。"
+        "综合语义、行业、业务场景和交付可行性评分。score 取 0-100；coverage_status 只能是 covered、partial、uncovered。"
+        "必须给出简洁可核验的 reason、gaps，以及 semantic、industry、scenario、delivery 四维评分。只返回 JSON。"
+    )
+    user = (
+        f"需求：\n{requirement_context}\n\n候选能力：\n{json.dumps(candidates, ensure_ascii=False)}\n"
+        '返回格式：{"recommendations":[{"project_id":1,"score":80,"coverage_status":"partial",'
+        '"reason":"...","gaps":["..."],"dimensions":{"semantic":80,"industry":80,"scenario":80,"delivery":80}}]}。'
+        "按 score 降序，最多返回 5 条；低于 40 分的候选不返回。"
+    )
+    response = httpx.post(
+        f"{base_url}/chat/completions",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json={
+            "model": model,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            "response_format": {"type": "json_object"},
+            "temperature": 0.1,
+        },
+        timeout=45.0,
+    )
+    response.raise_for_status()
+    content = response.json()["choices"][0]["message"]["content"].strip()
+    if content.startswith("```"):
+        content = "\n".join(line for line in content.splitlines() if not line.strip().startswith("```"))
+    payload = json.loads(content)
+    return payload if isinstance(payload, dict) else {"recommendations": []}
+
+
+def call_qwen_for_rag_chat(
+    *,
+    question: str,
+    history: list[dict[str, str]],
+    context: str,
+    api_key: str,
+    model: str,
+    base_url: str,
+) -> str:
+    system = (
+        "你是施耐德电气 AI 工坊平台助手。"
+        "只能依据提供的知识库资料回答业务问题，并用 [1] [2] 标注引用。"
+        "资料不足时应明确说明，不得编造客户、能力或项目状态。"
+        "回答使用简洁、专业的中文。"
+    )
+    messages = [{"role": "system", "content": system}]
+    messages.extend(history[-6:])
+    messages.append(
+        {
+            "role": "user",
+            "content": f"知识库资料：\n{context}\n\n当前问题：{question}",
+        }
+    )
+    response = httpx.post(
+        f"{base_url}/chat/completions",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": model,
+            "messages": messages,
+            "temperature": 0.2,
+            "max_tokens": 1000,
+        },
+        timeout=45.0,
+    )
+    response.raise_for_status()
+    content = str(response.json()["choices"][0]["message"]["content"])
+    return re.sub(r"<think>[\s\S]*?</think>", "", content).strip()

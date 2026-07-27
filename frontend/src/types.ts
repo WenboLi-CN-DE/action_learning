@@ -25,6 +25,10 @@ export interface RequirementItem {
   contact: string | null
   urgency: string
   status: string
+  submitted_by: string | null
+  reviewed_by: string | null
+  reviewed_at: string | null
+  review_note: string | null
   created_at: string
   updated_at: string
   tags: TagItem[]
@@ -36,6 +40,16 @@ export interface MatchItem {
   requirement_id: number
   coverage_status: string
   note: string | null
+  source: 'manual' | 'ai'
+  ai_score: number | null
+  ai_reason: string | null
+  ai_gaps: string[]
+  ai_model: string | null
+  created_by: string | null
+  review_status: 'pending' | 'approved' | 'rejected'
+  reviewed_by: string | null
+  reviewed_at: string | null
+  review_note: string | null
   created_at: string
   updated_at: string
   project: ProjectItem
@@ -57,6 +71,7 @@ export interface RequirementPayload {
   contact?: string
   urgency: string
   status: string
+  submitted_by?: string
   tag_ids: number[]
 }
 
@@ -70,6 +85,29 @@ export interface MatchPayload {
   requirement_id: number
   coverage_status: string
   note?: string
+  source?: 'manual' | 'ai'
+  ai_score?: number
+  ai_reason?: string
+  ai_gaps?: string[]
+  ai_model?: string
+  created_by?: string
+}
+
+export interface AIMatchRecommendation {
+  project_id: number
+  project: ProjectItem
+  score: number
+  coverage_status: string
+  reason: string
+  gaps: string[]
+  dimensions: Record<string, number>
+  already_confirmed: boolean
+}
+
+export interface AIMatchResult {
+  requirement_id: number
+  model: string
+  recommendations: AIMatchRecommendation[]
 }
 
 export type CommentTargetType = 'project' | 'requirement'
@@ -152,4 +190,40 @@ export interface RAGImportResult {
   doc_id: string
   chunk_count: number
   title: string
+}
+
+export interface ReviewEventItem {
+  id: number
+  target_type: 'requirement' | 'match'
+  target_id: number
+  action: string
+  actor: string
+  note: string | null
+  from_status: string
+  to_status: string
+  created_at: string
+}
+
+export interface RAGDocumentItem {
+  id: number
+  doc_id: string
+  title: string
+  source_type: string
+  source_id: string | null
+  tags: string[]
+  owner_role: string | null
+  chunk_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export interface ChatResult {
+  answer: string
+  citations: RAGCitation[]
+  model: string
 }

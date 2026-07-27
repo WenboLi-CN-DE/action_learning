@@ -37,6 +37,30 @@ AI工坊平台 — 行动学习课题产物。目标是打通前端（销售/咨
 
 ## 环境配置
 
+### 阿里云部署目标
+- **默认部署目标**: `aliyun-home-tunnel`
+  - 公网 IP: `8.152.171.142`
+  - SSH 用户: `root`
+  - 连接命令: `ssh aliyun-home-tunnel`
+  - Identity: `~/.ssh/id_ed25519_wenbo_pc`
+- **服务器系统**: Ubuntu 24.04 LTS
+- **部署目录**: `/opt/action_learning`
+- **后端服务**:
+  - systemd service: `action-learning`
+  - 监听地址: `127.0.0.1:18000`
+  - 启动方式: `uv run uvicorn app.main:app --host 127.0.0.1 --port 18000`
+- **前端入口**:
+  - Nginx 静态站点
+  - 对外地址: `http://8.152.171.142/`
+  - 内部备用监听: `0.0.0.0:18080`（如果阿里云安全组放通该端口，也可直接访问）
+  - `/api/`、`/docs`、`/openapi.json` 反向代理到后端 `127.0.0.1:18000`
+- **部署约束**:
+  - 不要覆盖服务器 `/etc/action-learning.env`
+  - 不要同步本地 `backend/.env`、`backend/database.db`、`backend/.venv`、`frontend/node_modules`、`frontend/dist`
+  - `80` 端口由 Nginx 共享；本工程只作为 IP/default server，不要影响 `rednote.wenbo.space` 等已有域名站点
+  - 不要占用服务器已有 `8000`、`8080`、`8081` 端口
+  - Qwen/LLM 生产环境变量放在服务器 `/etc/action-learning.env`
+
 ### Windows PowerShell 环境
 当前运行在 Windows 系统上，所有终端命令必须兼容 Windows PowerShell。
 

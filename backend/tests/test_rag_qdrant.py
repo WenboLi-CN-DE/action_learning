@@ -24,7 +24,7 @@ def test_qdrant_ingest_and_retrieve(backend: QdrantBackend):
         owner_role="研发",
     )
 
-    assert doc_id == "doc-1"
+    assert doc_id.startswith("doc-")
     assert chunk_count >= 1
 
     results = backend.retrieve(query="楼宇能耗优化", top_k=3, filters={})
@@ -78,4 +78,3 @@ def test_qdrant_filter_by_tags(backend: QdrantBackend):
     results = backend.retrieve(query="能效优化", top_k=5, filters={"tags": ["工业"]})
     assert len(results) >= 1
     assert any("工业" in r.chunk.tags for r in results)
-

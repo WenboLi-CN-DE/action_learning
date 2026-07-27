@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import re
+import uuid
 from dataclasses import dataclass
 from threading import Lock
 from typing import Any, Protocol
@@ -45,6 +46,9 @@ class RagBackend(Protocol):
     def clear(self) -> None:
         ...
 
+    def delete_document(self, doc_id: str) -> None:
+        ...
+
 
 # ===== Memory 后端（轻量，测试用）=====
 
@@ -55,28 +59,27 @@ class MemoryBackend:
     def __init__(self) -> None:
         self._lock = Lock()
         self._chunks: list[RagChunk] = []
-        self._doc_counter = 0
-        self._chunk_counter = 0
 
     def clear(self) -> None:
         with self._lock:
             self._chunks.clear()
-            self._doc_counter = 0
-            self._chunk_counter = 0
+
+    def delete_document(self, doc_id: str) -> None:
+        with self._lock:
+            self._chunks = [
+                chunk for chunk in self._chunks if chunk.doc_id != doc_id
+            ]
 
     def ingest(self, *, title: str, content: str, source_type: str, source_id: str | None, tags: list[str], owner_role: str | None) -> tuple[str, int]:
         chunk_size = config.get_chunk_size()
         overlap = config.get_chunk_overlap()
 
+        doc_id = f"doc-{uuid.uuid4().hex}"
+        pieces = split_text(content, chunk_size=chunk_size, overlap=overlap)
         with self._lock:
-            self._doc_counter += 1
-            doc_id = f"doc-{self._doc_counter}"
-
-            pieces = split_text(content, chunk_size=chunk_size, overlap=overlap)
             for piece in pieces:
-                self._chunk_counter += 1
                 chunk = RagChunk(
-                    chunk_id=f"chunk-{self._chunk_counter}",
+                    chunk_id=f"chunk-{uuid.uuid4().hex}",
                     doc_id=doc_id,
                     title=title,
                     text=piece,
@@ -119,40 +122,34 @@ class QdrantBackend:
         url = config.get_qdrant_url()
         api_key = config.get_qdrant_api_key()
         self._store = QdrantStore(url=url, api_key=api_key)
-        self._doc_counter = 0
-        self._chunk_counter = 0
         self._lock = Lock()
 
     def clear(self) -> None:
         with self._lock:
             self._store.clear()
-            self._doc_counter = 0
-            self._chunk_counter = 0
+
+    def delete_document(self, doc_id: str) -> None:
+        self._store.delete_by_doc_id(doc_id)
 
     def ingest(self, *, title: str, content: str, source_type: str, source_id: str | None, tags: list[str], owner_role: str | None) -> tuple[str, int]:
         chunk_size = config.get_chunk_size()
         overlap = config.get_chunk_overlap()
 
-        with self._lock:
-            self._doc_counter += 1
-            doc_id = f"doc-{self._doc_counter}"
-
+        doc_id = f"doc-{uuid.uuid4().hex}"
         pieces = split_text(content, chunk_size=chunk_size, overlap=overlap)
         payloads = []
-        with self._lock:
-            for idx, piece in enumerate(pieces):
-                self._chunk_counter += 1
-                payloads.append(self._ChunkPayload(
-                    chunk_id=f"chunk-{self._chunk_counter}",
-                    doc_id=doc_id,
-                    title=title,
-                    text=piece,
-                    source_type=source_type,
-                    source_id=source_id,
-                    tags=[tag.strip() for tag in tags if tag.strip()],
-                    owner_role=owner_role,
-                    chunk_index=idx,
-                ))
+        for idx, piece in enumerate(pieces):
+            payloads.append(self._ChunkPayload(
+                chunk_id=f"chunk-{uuid.uuid4().hex}",
+                doc_id=doc_id,
+                title=title,
+                text=piece,
+                source_type=source_type,
+                source_id=source_id,
+                tags=[tag.strip() for tag in tags if tag.strip()],
+                owner_role=owner_role,
+                chunk_index=idx,
+            ))
 
         self._store.add_chunks(payloads)
         return doc_id, len(pieces)

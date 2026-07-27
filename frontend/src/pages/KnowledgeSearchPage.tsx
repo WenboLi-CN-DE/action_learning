@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Alert,
   Button,
@@ -7,17 +7,27 @@ import {
   Form,
   Input,
   Layout,
+  Popconfirm,
   Select,
   Space,
   Spin,
+  Table,
   Tag,
   Typography,
   Upload,
 } from 'antd'
-import { SearchOutlined, ArrowLeftOutlined, UploadOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router'
-import { importRAGFile, ragQuery } from '../services/api'
-import type { RAGChunk, RAGQueryResult } from '../types'
+import {
+  deleteRAGDocument,
+  fetchRAGDocuments,
+  importRAGFile,
+  ragQuery,
+  rebuildRAGIndex,
+} from '../services/api'
+import { getRoleCapabilities } from '../auth/permissions'
+import { useRoleStore } from '../auth/roleStore'
+import type { RAGChunk, RAGDocumentItem, RAGQueryResult } from '../types'
 
 const { Header, Content } = Layout
 const { Title, Text, Paragraph } = Typography
@@ -30,6 +40,8 @@ const sourceTypeOptions = [
 
 export default function KnowledgeSearchPage() {
   const navigate = useNavigate()
+  const role = useRoleStore((state) => state.role) ?? 'sales'
+  const capabilities = getRoleCapabilities(role)
   const [importForm] = Form.useForm<{ source_type: string; tags?: string; owner_role?: string }>()
   const [question, setQuestion] = useState('')
   const [sourceType, setSourceType] = useState('')
@@ -40,6 +52,43 @@ export default function KnowledgeSearchPage() {
   const [importing, setImporting] = useState(false)
   const [importMessage, setImportMessage] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
+  const [documents, setDocuments] = useState<RAGDocumentItem[]>([])
+  const [documentsLoading, setDocumentsLoading] = useState(false)
+  const [rebuilding, setRebuilding] = useState(false)
+
+  async function loadDocuments() {
+    if (!capabilities.canManageKnowledge) return
+    setDocumentsLoading(true)
+    try {
+      setDocuments(await fetchRAGDocuments())
+    } catch (requestError) {
+      setImportError(requestError instanceof Error ? requestError.message : '知识文档加载失败')
+    } finally {
+      setDocumentsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!capabilities.canManageKnowledge) return
+    let active = true
+    Promise.resolve().then(async () => {
+      if (!active) return
+      setDocumentsLoading(true)
+      try {
+        const data = await fetchRAGDocuments()
+        if (active) setDocuments(data)
+      } catch (requestError) {
+        if (active) {
+          setImportError(requestError instanceof Error ? requestError.message : '知识文档加载失败')
+        }
+      } finally {
+        if (active) setDocumentsLoading(false)
+      }
+    })
+    return () => {
+      active = false
+    }
+  }, [capabilities.canManageKnowledge])
 
   async function handleSearch() {
     const q = question.trim()
@@ -83,10 +132,35 @@ export default function KnowledgeSearchPage() {
       setImportMessage(`已导入 ${data.title}，生成 ${data.chunk_count} 个知识片段`)
       setImportFile(null)
       importForm.resetFields()
+      await loadDocuments()
     } catch (err) {
       setImportError(err instanceof Error ? err.message : '资料导入失败')
     } finally {
       setImporting(false)
+    }
+  }
+
+  async function handleDeleteDocument(documentId: number) {
+    try {
+      await deleteRAGDocument(documentId)
+      setImportMessage('知识文档及其索引已删除')
+      await loadDocuments()
+    } catch (requestError) {
+      setImportError(requestError instanceof Error ? requestError.message : '知识文档删除失败')
+    }
+  }
+
+  async function handleRebuild() {
+    setRebuilding(true)
+    setImportError(null)
+    try {
+      const result = await rebuildRAGIndex()
+      setImportMessage(`索引已重建：${result.document_count} 份资料，${result.chunk_count} 个片段`)
+      await loadDocuments()
+    } catch (requestError) {
+      setImportError(requestError instanceof Error ? requestError.message : '索引重建失败')
+    } finally {
+      setRebuilding(false)
     }
   }
 
@@ -104,7 +178,7 @@ export default function KnowledgeSearchPage() {
       </Header>
 
       <Content style={{ padding: '24px', maxWidth: 900, margin: '0 auto', width: '100%' }}>
-        <Card title="导入资料" style={{ marginBottom: 24 }}>
+        {capabilities.canManageKnowledge && <Card title="导入资料" style={{ marginBottom: 24 }}>
           <Form
             form={importForm}
             layout="vertical"
@@ -148,9 +222,49 @@ export default function KnowledgeSearchPage() {
               </Button>
             </Space>
           </Form>
-          {importMessage && <Alert type="success" message={importMessage} showIcon style={{ marginTop: 16 }} />}
-          {importError && <Alert type="error" message={importError} showIcon style={{ marginTop: 16 }} />}
-        </Card>
+          {importMessage && <Alert type="success" title={importMessage} showIcon style={{ marginTop: 16 }} />}
+          {importError && <Alert type="error" title={importError} showIcon style={{ marginTop: 16 }} />}
+        </Card>}
+
+        {capabilities.canManageKnowledge && (
+          <Card
+            title="知识文档管理"
+            style={{ marginBottom: 24 }}
+            extra={
+              <Button icon={<ReloadOutlined />} loading={rebuilding} onClick={handleRebuild}>
+                重建索引
+              </Button>
+            }
+          >
+            <Table
+              rowKey="id"
+              loading={documentsLoading}
+              dataSource={documents}
+              pagination={false}
+              columns={[
+                { title: '文档', dataIndex: 'title', key: 'title' },
+                { title: '来源', dataIndex: 'source_type', key: 'source_type', render: (value) => <Tag>{value}</Tag> },
+                { title: '片段', dataIndex: 'chunk_count', key: 'chunk_count', width: 80 },
+                {
+                  title: '导入时间',
+                  dataIndex: 'created_at',
+                  key: 'created_at',
+                  render: (value) => new Date(value).toLocaleString(),
+                },
+                {
+                  title: '操作',
+                  key: 'action',
+                  width: 90,
+                  render: (_, record) => (
+                    <Popconfirm title="删除该文档及其索引？" onConfirm={() => handleDeleteDocument(record.id)}>
+                      <Button danger size="small" icon={<DeleteOutlined />}>删除</Button>
+                    </Popconfirm>
+                  ),
+                },
+              ]}
+            />
+          </Card>
+        )}
 
         <Card style={{ marginBottom: 24 }}>
           <Space.Compact style={{ width: '100%' }}>
@@ -180,7 +294,7 @@ export default function KnowledgeSearchPage() {
           </Space.Compact>
         </Card>
 
-        {error && <Alert type="error" message={error} showIcon style={{ marginBottom: 16 }} />}
+        {error && <Alert type="error" title={error} showIcon style={{ marginBottom: 16 }} />}
 
         {loading && (
           <div style={{ textAlign: 'center', padding: 48 }}>

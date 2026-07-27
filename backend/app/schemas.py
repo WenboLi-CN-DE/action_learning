@@ -56,7 +56,8 @@ class RequirementCreate(SQLModel):
     customer: str
     contact: str | None = None
     urgency: str = "medium"
-    status: str = "new"
+    status: str = "draft"
+    submitted_by: str | None = None
     tag_ids: list[int] = []
 
 
@@ -78,6 +79,10 @@ class RequirementRead(SQLModel):
     contact: str | None
     urgency: str
     status: str
+    submitted_by: str | None
+    reviewed_by: str | None
+    reviewed_at: datetime | None
+    review_note: str | None
     created_at: datetime
     updated_at: datetime
     tags: list[TagRead] = []
@@ -88,6 +93,12 @@ class MatchCreate(SQLModel):
     requirement_id: int
     coverage_status: str
     note: str | None = None
+    source: str = "manual"
+    ai_score: float | None = None
+    ai_reason: str | None = None
+    ai_gaps: list[str] = []
+    ai_model: str | None = None
+    created_by: str | None = None
 
 
 class MatchUpdate(SQLModel):
@@ -101,6 +112,16 @@ class MatchRead(SQLModel):
     requirement_id: int
     coverage_status: str
     note: str | None
+    source: str
+    ai_score: float | None
+    ai_reason: str | None
+    ai_gaps: list[str]
+    ai_model: str | None
+    created_by: str | None
+    review_status: str
+    reviewed_by: str | None
+    reviewed_at: datetime | None
+    review_note: str | None
     created_at: datetime
     updated_at: datetime
     project: ProjectRead
@@ -122,6 +143,30 @@ class CommentRead(SQLModel):
     content: str
     created_at: datetime
     updated_at: datetime
+
+
+class ReviewRequest(SQLModel):
+    action: str
+    reviewer: str
+    note: str | None = None
+
+
+class RequirementTransitionRequest(SQLModel):
+    target_status: str
+    actor: str
+    note: str | None = None
+
+
+class ReviewEventRead(SQLModel):
+    id: int
+    target_type: str
+    target_id: int
+    action: str
+    actor: str
+    note: str | None
+    from_status: str
+    to_status: str
+    created_at: datetime
 
 
 class LLMStatusRead(SQLModel):
@@ -150,6 +195,27 @@ class LLMStructureResult(SQLModel):
 class LLMImageRecognitionResult(SQLModel):
     text: str
     model: str
+
+
+class AIMatchRequest(LLMOverride):
+    top_k: int = 5
+
+
+class AIMatchRecommendation(SQLModel):
+    project_id: int
+    project: ProjectRead
+    score: float
+    coverage_status: str
+    reason: str
+    gaps: list[str] = []
+    dimensions: dict[str, float] = {}
+    already_confirmed: bool = False
+
+
+class AIMatchResult(SQLModel):
+    requirement_id: int
+    model: str
+    recommendations: list[AIMatchRecommendation] = []
 
 
 class RAGIngestRequest(SQLModel):
@@ -211,3 +277,37 @@ class RAGQueryResult(SQLModel):
     answer: str
     citations: list[RAGCitationRead] = []
     retrieved_chunks: list[RAGChunkRead] = []
+
+
+class RAGDocumentRead(SQLModel):
+    id: int
+    doc_id: str
+    title: str
+    source_type: str
+    source_id: str | None
+    tags: list[str]
+    owner_role: str | None
+    chunk_count: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class RAGRebuildResult(SQLModel):
+    document_count: int
+    chunk_count: int
+
+
+class ChatMessage(SQLModel):
+    role: str
+    content: str
+
+
+class ChatRequest(LLMOverride):
+    messages: list[ChatMessage]
+    top_k: int = 5
+
+
+class ChatResult(SQLModel):
+    answer: str
+    citations: list[RAGCitationRead] = []
+    model: str

@@ -1,6 +1,10 @@
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
+from sqlmodel import Session, select
+
+from app.database import get_session
+from app.models import KnowledgeDocument, Project, Requirement, utc_now
 
 from app.rag import service as rag_service
 from app.schemas import (
@@ -9,6 +13,8 @@ from app.schemas import (
     RAGIngestRequest,
     RAGIngestResult,
     RAGImportResult,
+    RAGDocumentRead,
+    RAGRebuildResult,
     RAGQueryRequest,
     RAGQueryResult,
     RAGRetrieveRequest,
@@ -20,7 +26,10 @@ SUPPORTED_IMPORT_EXTENSIONS = {".txt", ".md", ".csv"}
 
 
 @router.post("/ingest", response_model=RAGIngestResult)
-def ingest_document(payload: RAGIngestRequest):
+def ingest_document(
+    payload: RAGIngestRequest,
+    session: Session = Depends(get_session),
+):
     title = payload.title.strip()
     content = payload.content.strip()
     if not title:
@@ -37,6 +46,19 @@ def ingest_document(payload: RAGIngestRequest):
         tags=payload.tags,
         owner_role=payload.owner_role,
     )
+    session.add(
+        KnowledgeDocument(
+            doc_id=doc_id,
+            title=title,
+            content=content,
+            source_type=payload.source_type,
+            source_id=payload.source_id,
+            tags=payload.tags,
+            owner_role=payload.owner_role,
+            chunk_count=chunk_count,
+        )
+    )
+    session.commit()
     return RAGIngestResult(doc_id=doc_id, chunk_count=chunk_count)
 
 
@@ -47,6 +69,7 @@ async def import_file(
     source_id: str | None = Form(None),
     tags: str = Form(""),
     owner_role: str | None = Form(None),
+    session: Session = Depends(get_session),
 ):
     filename = file.filename or "未命名资料"
     suffix = Path(filename).suffix.lower()
@@ -72,7 +95,117 @@ async def import_file(
         tags=parsed_tags,
         owner_role=owner_role.strip() if owner_role else None,
     )
+    session.add(
+        KnowledgeDocument(
+            doc_id=doc_id,
+            title=filename,
+            content=content,
+            source_type=source_type.strip() or "manual",
+            source_id=source_id.strip() if source_id else None,
+            tags=parsed_tags,
+            owner_role=owner_role.strip() if owner_role else None,
+            chunk_count=chunk_count,
+        )
+    )
+    session.commit()
     return RAGImportResult(doc_id=doc_id, chunk_count=chunk_count, title=filename)
+
+
+@router.get("/documents", response_model=list[RAGDocumentRead])
+def list_documents(session: Session = Depends(get_session)):
+    return session.exec(
+        select(KnowledgeDocument).order_by(KnowledgeDocument.created_at.desc())
+    ).all()
+
+
+@router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_document(
+    document_id: int,
+    session: Session = Depends(get_session),
+):
+    document = session.get(KnowledgeDocument, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Knowledge document not found")
+    rag_service.get_backend().delete_document(document.doc_id)
+    session.delete(document)
+    session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/rebuild", response_model=RAGRebuildResult)
+def rebuild_index(session: Session = Depends(get_session)):
+    backend = rag_service.get_backend()
+    backend.clear()
+    document_count = 0
+    chunk_count = 0
+
+    for project in session.exec(select(Project)).all():
+        tags = [tag.name for tag in project.tags]
+        parts = [
+            f"能力名称：{project.name}",
+            f"负责人：{project.owner}",
+            f"状态：{project.status}",
+        ]
+        if tags:
+            parts.append(f"标签：{'、'.join(tags)}")
+        if project.description:
+            parts.append(f"描述：{project.description}")
+        _, chunks = backend.ingest(
+            title=project.name,
+            content="\n".join(parts),
+            source_type="project",
+            source_id=str(project.id),
+            tags=tags,
+            owner_role=project.owner,
+        )
+        document_count += 1
+        chunk_count += chunks
+
+    for requirement in session.exec(select(Requirement)).all():
+        tags = [tag.name for tag in requirement.tags]
+        parts = [
+            f"需求标题：{requirement.title}",
+            f"客户：{requirement.customer}",
+            f"紧急度：{requirement.urgency}",
+            f"状态：{requirement.status}",
+        ]
+        if requirement.contact:
+            parts.append(f"联系人：{requirement.contact}")
+        if tags:
+            parts.append(f"标签：{'、'.join(tags)}")
+        parts.append(f"描述：{requirement.description}")
+        _, chunks = backend.ingest(
+            title=requirement.title,
+            content="\n".join(parts),
+            source_type="requirement",
+            source_id=str(requirement.id),
+            tags=tags,
+            owner_role=requirement.customer,
+        )
+        document_count += 1
+        chunk_count += chunks
+
+    for document in session.exec(select(KnowledgeDocument)).all():
+        doc_id, chunks = backend.ingest(
+            title=document.title,
+            content=document.content,
+            source_type=document.source_type,
+            source_id=document.source_id,
+            tags=document.tags,
+            owner_role=document.owner_role,
+        )
+        document.doc_id = doc_id
+        document.chunk_count = chunks
+        document.updated_at = utc_now()
+        session.add(document)
+        document_count += 1
+        chunk_count += chunks
+
+    session.commit()
+    return RAGRebuildResult(
+        document_count=document_count,
+        chunk_count=chunk_count,
+    )
 
 
 @router.post("/retrieve", response_model=RAGRetrieveResult)

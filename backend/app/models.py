@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 
+from sqlalchemy import Column, JSON, Text
 from sqlmodel import Field, Relationship, SQLModel
 
 class DemoItem(SQLModel, table=True):
@@ -56,6 +57,10 @@ class Requirement(SQLModel, table=True):
     contact: str | None = Field(default=None, max_length=100)
     urgency: str = Field(default="medium", max_length=50)
     status: str = Field(default="new", max_length=50)
+    submitted_by: str | None = Field(default=None, max_length=100)
+    reviewed_by: str | None = Field(default=None, max_length=100)
+    reviewed_at: datetime | None = Field(default=None)
+    review_note: str | None = Field(default=None, max_length=1000)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -69,6 +74,16 @@ class ProjectRequirementMatch(SQLModel, table=True):
     requirement_id: int = Field(foreign_key="requirement.id", index=True)
     coverage_status: str = Field(max_length=50)
     note: str | None = Field(default=None, max_length=1000)
+    source: str = Field(default="manual", max_length=20)
+    ai_score: float | None = Field(default=None)
+    ai_reason: str | None = Field(default=None, max_length=2000)
+    ai_gaps: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    ai_model: str | None = Field(default=None, max_length=100)
+    created_by: str | None = Field(default=None, max_length=100)
+    review_status: str = Field(default="pending", max_length=20)
+    reviewed_by: str | None = Field(default=None, max_length=100)
+    reviewed_at: datetime | None = Field(default=None)
+    review_note: str | None = Field(default=None, max_length=1000)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -82,5 +97,31 @@ class Comment(SQLModel, table=True):
     target_id: int = Field(index=True)
     author: str = Field(max_length=100)
     content: str = Field(max_length=2000)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class ReviewEvent(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    target_type: str = Field(max_length=30, index=True)
+    target_id: int = Field(index=True)
+    action: str = Field(max_length=30)
+    actor: str = Field(max_length=100)
+    note: str | None = Field(default=None, max_length=1000)
+    from_status: str = Field(max_length=50)
+    to_status: str = Field(max_length=50)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class KnowledgeDocument(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    doc_id: str = Field(max_length=100, index=True)
+    title: str = Field(max_length=300)
+    content: str = Field(sa_column=Column(Text))
+    source_type: str = Field(default="manual", max_length=50)
+    source_id: str | None = Field(default=None, max_length=100)
+    tags: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    owner_role: str | None = Field(default=None, max_length=100)
+    chunk_count: int = Field(default=0)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)

@@ -18,6 +18,24 @@ def setup_function() -> None:
     set_backend(backend)
 
 
+def test_document_ids_remain_unique_across_backend_restarts():
+    first_backend = MemoryBackend()
+    second_backend = MemoryBackend()
+    ingest_args = {
+        "title": "测试资料",
+        "content": "用于验证重启后的文档编号不会冲突。",
+        "source_type": "manual",
+        "source_id": None,
+        "tags": [],
+        "owner_role": None,
+    }
+
+    first_doc_id, _ = first_backend.ingest(**ingest_args)
+    second_doc_id, _ = second_backend.ingest(**ingest_args)
+
+    assert first_doc_id != second_doc_id
+
+
 def test_rag_ingest_and_retrieve_flow():
     ingest_response = client.post(
         "/api/v1/rag/ingest",

@@ -1,4 +1,7 @@
 import type {
+  AIMatchResult,
+  ChatMessage,
+  ChatResult,
   CommentItem,
   CommentPayload,
   LLMImageRecognitionResult,
@@ -9,11 +12,13 @@ import type {
   MatchPayload,
   ProjectItem,
   ProjectPayload,
+  RAGDocumentItem,
   RAGImportResult,
   RAGQueryResult,
   RAGRetrieveResult,
   RequirementItem,
   RequirementPayload,
+  ReviewEventItem,
   TagItem,
   TagPayload,
 } from '../types'
@@ -30,6 +35,7 @@ async function fetchJSON<T>(path: string, options: RequestInit = {}): Promise<T>
     const detail = typeof payload?.detail === 'string' ? payload.detail : null
     throw new Error(detail ?? `API Error: ${response.status} ${response.statusText}`)
   }
+  if (response.status === 204) return undefined as T
   return response.json()
 }
 
@@ -97,6 +103,46 @@ export const createMatch = (payload: MatchPayload) =>
     body: JSON.stringify(payload),
   })
 
+export const reviewRequirement = (
+  requirementId: number,
+  payload: { action: 'approve' | 'return'; reviewer: string; note?: string },
+) =>
+  fetchJSON<RequirementItem>(`/requirements/${requirementId}/review`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+
+export const transitionRequirement = (
+  requirementId: number,
+  payload: { target_status: string; actor: string; note?: string },
+) =>
+  fetchJSON<RequirementItem>(`/requirements/${requirementId}/transition`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+
+export const reviewMatch = (
+  matchId: number,
+  payload: { action: 'approve' | 'reject'; reviewer: string; note?: string },
+) =>
+  fetchJSON<MatchItem>(`/matches/${matchId}/review`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+
+export const fetchReviewEvents = (targetType: 'requirement' | 'match', targetId: number) =>
+  fetchJSON<ReviewEventItem[]>(`/review-events?target_type=${targetType}&target_id=${targetId}`)
+
+export const analyzeRequirementMatches = (
+  requirementId: number,
+  topK: number,
+  settings: LLMSettings | null,
+) =>
+  fetchJSON<AIMatchResult>(`/requirements/${requirementId}/ai-matches`, {
+    method: 'POST',
+    body: JSON.stringify({ top_k: topK, ...(settings ?? {}) }),
+  })
+
 export const fetchComments = (targetType: CommentPayload['target_type'], targetId: number) =>
   fetchJSON<CommentItem[]>(`/comments?target_type=${targetType}&target_id=${targetId}`)
 
@@ -155,3 +201,20 @@ export const importRAGFile = (
   if (options.owner_role) formData.append('owner_role', options.owner_role)
   return fetchFormData<RAGImportResult>('/rag/import-file', formData)
 }
+
+export const fetchRAGDocuments = () => fetchJSON<RAGDocumentItem[]>('/rag/documents')
+
+export const deleteRAGDocument = (documentId: number) =>
+  fetchJSON<void>(`/rag/documents/${documentId}`, { method: 'DELETE' })
+
+export const rebuildRAGIndex = () =>
+  fetchJSON<{ document_count: number; chunk_count: number }>('/rag/rebuild', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+
+export const chatWithKnowledge = (messages: ChatMessage[], settings: LLMSettings | null) =>
+  fetchJSON<ChatResult>('/chat', {
+    method: 'POST',
+    body: JSON.stringify({ messages, ...(settings ?? {}) }),
+  })
