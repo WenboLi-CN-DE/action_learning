@@ -45,7 +45,9 @@
 
 .role-card {
   min-height: 210px;
+  overflow: hidden;
   border: 1px solid rgba(173, 229, 184, 0.28);
+  border-radius: 16px;
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.06));
   box-shadow: 0 14px 34px rgba(2, 20, 14, 0.2);
