@@ -99,6 +99,60 @@ def test_returning_requirement_requires_a_review_note():
     assert response.status_code == 400
 
 
+def test_admin_can_assign_legacy_requirement_to_a_reviewer():
+    requirement = client.post(
+        "/api/v1/requirements",
+        json={
+            "title": "历史需求纳入审核",
+            "description": "管理员指派审核负责人后进入待审核状态。",
+            "customer": "历史客户",
+            "status": "new",
+            "submitted_by": "张销售",
+            "tag_ids": [],
+        },
+    ).json()
+
+    response = client.post(
+        f"/api/v1/requirements/{requirement['id']}/assign-reviewer",
+        json={
+            "reviewer": "王管理员",
+            "actor": "李管理员",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["assigned_reviewer"] == "王管理员"
+    assert response.json()["status"] == "pending_review"
+
+    events = client.get(
+        f"/api/v1/review-events?target_type=requirement&target_id={requirement['id']}"
+    ).json()
+    assert events[-1]["action"] == "assign_reviewer"
+    assert events[-1]["actor"] == "李管理员"
+
+
+def test_only_assigned_reviewer_can_review_requirement():
+    requirement = _create_requirement()
+    assigned = client.post(
+        f"/api/v1/requirements/{requirement['id']}/assign-reviewer",
+        json={
+            "reviewer": "王管理员",
+            "actor": "李管理员",
+        },
+    )
+    assert assigned.status_code == 200
+
+    response = client.post(
+        f"/api/v1/requirements/{requirement['id']}/review",
+        json={
+            "action": "approve",
+            "reviewer": "赵管理员",
+        },
+    )
+
+    assert response.status_code == 409
+
+
 def test_match_requires_technical_confirmation_and_final_approval():
     requirement = _create_requirement(status="accepted")
     project = _create_project()

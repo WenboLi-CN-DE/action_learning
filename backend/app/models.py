@@ -58,6 +58,7 @@ class Requirement(SQLModel, table=True):
     urgency: str = Field(default="medium", max_length=50)
     status: str = Field(default="new", max_length=50)
     submitted_by: str | None = Field(default=None, max_length=100)
+    assigned_reviewer: str | None = Field(default=None, max_length=100)
     reviewed_by: str | None = Field(default=None, max_length=100)
     reviewed_at: datetime | None = Field(default=None)
     review_note: str | None = Field(default=None, max_length=1000)

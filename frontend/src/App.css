@@ -338,6 +338,20 @@
   color: #0a2f24;
 }
 
+.requirement-review-card {
+  margin-top: 18px;
+  border-color: #b8e6c1;
+  background: linear-gradient(135deg, #fbfefb, #f2faf4);
+}
+
+.reviewer-assignment {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #dcebdd;
+}
+
 .review-queue h4.ant-typography {
   margin: 0;
 }

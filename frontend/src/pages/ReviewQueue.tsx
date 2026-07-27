@@ -21,6 +21,7 @@ interface ReviewQueueProps {
   reviewer: string
   role: RoleId
   onReviewed: () => Promise<void>
+  onOpenRequirement: (requirement: RequirementItem) => void
 }
 
 export default function ReviewQueue({
@@ -29,6 +30,7 @@ export default function ReviewQueue({
   reviewer,
   role,
   onReviewed,
+  onOpenRequirement,
 }: ReviewQueueProps) {
   const [workingKey, setWorkingKey] = useState<string | null>(null)
   const [noteAction, setNoteAction] = useState<NoteAction | null>(null)
@@ -146,29 +148,49 @@ export default function ReviewQueue({
                 { title: '客户', dataIndex: 'customer', key: 'customer' },
                 { title: '提交人', dataIndex: 'submitted_by', key: 'submitted_by', render: (value) => value || '-' },
                 {
+                  title: '审核负责人',
+                  dataIndex: 'assigned_reviewer',
+                  key: 'assigned_reviewer',
+                  render: (value) => value ? <Tag color="blue">{value}</Tag> : <Tag color="gold">待指派</Tag>,
+                },
+                {
                   title: '操作',
                   key: 'action',
-                  render: (_, record) => (
-                    <Space>
-                      <Popconfirm title="确认受理该需求并进入关联编排？" onConfirm={() => handleRequirement(record.id, 'approve')}>
-                        <Button type="primary" size="small" loading={workingKey === `requirement-${record.id}`}>
-                          受理
+                  render: (_, record) => {
+                    const assignedElsewhere = Boolean(
+                      record.assigned_reviewer && record.assigned_reviewer !== reviewer,
+                    )
+                    return (
+                      <Space>
+                        <Button size="small" onClick={() => onOpenRequirement(record)}>
+                          查看 / 指派
                         </Button>
-                      </Popconfirm>
-                      <Button
-                        size="small"
-                        danger
-                        onClick={() => setNoteAction({
-                          target: 'requirement',
-                          id: record.id,
-                          action: 'return',
-                          title: `退回需求：${record.title}`,
-                        })}
-                      >
-                        退回补充
-                      </Button>
-                    </Space>
-                  ),
+                        <Popconfirm title="确认受理该需求并进入关联编排？" onConfirm={() => handleRequirement(record.id, 'approve')}>
+                          <Button
+                            type="primary"
+                            size="small"
+                            disabled={assignedElsewhere}
+                            loading={workingKey === `requirement-${record.id}`}
+                          >
+                            受理
+                          </Button>
+                        </Popconfirm>
+                        <Button
+                          size="small"
+                          danger
+                          disabled={assignedElsewhere}
+                          onClick={() => setNoteAction({
+                            target: 'requirement',
+                            id: record.id,
+                            action: 'return',
+                            title: `退回需求：${record.title}`,
+                          })}
+                        >
+                          退回补充
+                        </Button>
+                      </Space>
+                    )
+                  },
                 },
               ]}
             />

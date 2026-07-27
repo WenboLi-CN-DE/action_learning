@@ -26,6 +26,7 @@ export interface RequirementItem {
   urgency: string
   status: string
   submitted_by: string | null
+  assigned_reviewer: string | null
   reviewed_by: string | null
   reviewed_at: string | null
   review_note: string | null

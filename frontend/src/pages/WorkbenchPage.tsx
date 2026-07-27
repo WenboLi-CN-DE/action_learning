@@ -24,6 +24,7 @@ import type { ColumnsType } from 'antd/es/table'
 import { EditOutlined, EyeOutlined, LinkOutlined, LogoutOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons'
 import {
   analyzeRequirementMatches,
+  assignRequirementReviewer,
   createComment,
   createMatch,
   createProject,
@@ -146,6 +147,7 @@ function reviewActionLabel(action: string) {
     technical_reject: '技术拒绝',
     final_approve: '最终批准',
     final_reject: '最终拒绝',
+    assign_reviewer: '指派审核人',
     match_approved: '匹配确认',
     match_rejected: '匹配拒绝',
   }
@@ -175,6 +177,8 @@ export default function WorkbenchPage() {
   const [selectedDashboardTagId, setSelectedDashboardTagId] = useState<number | null>(null)
   const [selectedProjectTagId, setSelectedProjectTagId] = useState<number | null>(null)
   const [selectedRequirementTagId, setSelectedRequirementTagId] = useState<number | null>(null)
+  const [reviewerAssignment, setReviewerAssignment] = useState('')
+  const [assigningReviewer, setAssigningReviewer] = useState(false)
   const [llmSettingsOpen, setLLMSettingsOpen] = useState(false)
   const [llmSettings, setLLMSettings] = useState<LLMSettings | null>(() => loadLLMSettings())
   const [llmStatus, setLLMStatus] = useState<LLMStatus | null>(null)
@@ -477,6 +481,11 @@ export default function WorkbenchPage() {
     setDetailTarget(target)
     setAIMatchResult(null)
     setReviewEvents([])
+    setReviewerAssignment(
+      target.type === 'requirement'
+        ? target.item.assigned_reviewer || displayName
+        : '',
+    )
     commentForm.resetFields()
     await Promise.all([
       loadComments(target),
@@ -486,6 +495,29 @@ export default function WorkbenchPage() {
             .catch(() => setReviewEvents([]))
         : Promise.resolve(),
     ])
+  }
+
+  async function assignReviewer() {
+    if (detailTarget?.type !== 'requirement' || !reviewerAssignment.trim()) return
+    setAssigningReviewer(true)
+    try {
+      const updated = await assignRequirementReviewer(detailTarget.item.id, {
+        reviewer: reviewerAssignment.trim(),
+        actor: displayName,
+      })
+      setDetailTarget({ type: 'requirement', item: updated })
+      setReviewEvents(await fetchReviewEvents('requirement', updated.id))
+      await loadData()
+      messageApi.success(
+        ['new', 'reviewing'].includes(detailTarget.item.status)
+          ? '审核负责人已指派，历史需求已进入待审核队列'
+          : '审核负责人已更新',
+      )
+    } catch (requestError) {
+      messageApi.error(requestError instanceof Error ? requestError.message : '审核负责人指派失败')
+    } finally {
+      setAssigningReviewer(false)
+    }
   }
 
   async function runAIMatching() {
@@ -1049,6 +1081,7 @@ export default function WorkbenchPage() {
                   reviewer={displayName}
                   role={role}
                   onReviewed={loadData}
+                  onOpenRequirement={(requirement) => void openDetail({ type: 'requirement', item: requirement })}
                 />
               ),
             },
@@ -1148,6 +1181,7 @@ export default function WorkbenchPage() {
           setDetailTarget(null)
           setComments([])
           setReviewEvents([])
+          setReviewerAssignment('')
         }}
       >
         {detailTarget?.type === 'project' && (
@@ -1193,6 +1227,51 @@ export default function WorkbenchPage() {
               </Button>
             )}
           </Space>
+          <Card
+            size="small"
+            className="requirement-review-card"
+            title="审核责任"
+            extra={<AntTag color={detailTarget.item.reviewed_by ? 'green' : detailTarget.item.assigned_reviewer ? 'blue' : 'gold'}>
+              {detailTarget.item.reviewed_by ? '已审核' : detailTarget.item.assigned_reviewer ? '已指派' : '待指派'}
+            </AntTag>}
+          >
+            <Descriptions column={1} size="small">
+              <Descriptions.Item label="需求提交人">{detailTarget.item.submitted_by || '-'}</Descriptions.Item>
+              <Descriptions.Item label="审核负责人">{detailTarget.item.assigned_reviewer || '尚未指派'}</Descriptions.Item>
+              <Descriptions.Item label="实际审核人">
+                {detailTarget.item.reviewed_by
+                  ? `${detailTarget.item.reviewed_by}${detailTarget.item.reviewed_at ? ` · ${new Date(detailTarget.item.reviewed_at).toLocaleString()}` : ''}`
+                  : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="审核意见">{detailTarget.item.review_note || '-'}</Descriptions.Item>
+            </Descriptions>
+            {role === 'admin' && ['new', 'reviewing', 'pending_review'].includes(detailTarget.item.status) && (
+              <div className="reviewer-assignment">
+                <Text strong>指派审核负责人</Text>
+                <Text type="secondary">
+                  {['new', 'reviewing'].includes(detailTarget.item.status)
+                    ? '指派后会将历史需求纳入待审核队列。'
+                    : '只有被指派的管理员可以执行需求审核。'}
+                </Text>
+                <Space.Compact style={{ width: '100%' }}>
+                  <Input
+                    value={reviewerAssignment}
+                    placeholder="输入审核人姓名"
+                    onChange={(event) => setReviewerAssignment(event.target.value)}
+                    onPressEnter={() => void assignReviewer()}
+                  />
+                  <Button
+                    type="primary"
+                    loading={assigningReviewer}
+                    disabled={!reviewerAssignment.trim()}
+                    onClick={() => void assignReviewer()}
+                  >
+                    {['new', 'reviewing'].includes(detailTarget.item.status) ? '指派并进入审核' : '保存指派'}
+                  </Button>
+                </Space.Compact>
+              </div>
+            )}
+          </Card>
           <Divider>AI 关联性分析</Divider>
           <Button type="primary" icon={<SearchOutlined />} loading={aiMatchLoading} onClick={runAIMatching}>
             分析匹配能力

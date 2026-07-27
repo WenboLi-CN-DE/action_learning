@@ -80,6 +80,7 @@ class RequirementRead(SQLModel):
     urgency: str
     status: str
     submitted_by: str | None
+    assigned_reviewer: str | None
     reviewed_by: str | None
     reviewed_at: datetime | None
     review_note: str | None
@@ -149,6 +150,11 @@ class ReviewRequest(SQLModel):
     action: str
     reviewer: str
     note: str | None = None
+
+
+class ReviewerAssignmentRequest(SQLModel):
+    reviewer: str
+    actor: str
 
 
 class RequirementTransitionRequest(SQLModel):

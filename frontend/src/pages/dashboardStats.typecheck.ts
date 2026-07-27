@@ -29,6 +29,7 @@ const requirement: RequirementItem = {
   urgency: 'high',
   status: 'new',
   submitted_by: null,
+  assigned_reviewer: null,
   reviewed_by: null,
   reviewed_at: null,
   review_note: null,

@@ -18,6 +18,7 @@ from app.schemas import (
     RequirementTransitionRequest,
     RequirementUpdate,
     ReviewRequest,
+    ReviewerAssignmentRequest,
 )
 
 router = APIRouter(prefix="/requirements", tags=["requirements"])
@@ -123,6 +124,11 @@ def review_requirement(
     reviewer = payload.reviewer.strip()
     if not reviewer:
         raise HTTPException(status_code=400, detail="审核人不能为空")
+    if requirement.assigned_reviewer and reviewer != requirement.assigned_reviewer.strip():
+        raise HTTPException(
+            status_code=409,
+            detail=f"该需求已指派给 {requirement.assigned_reviewer} 审核",
+        )
     if requirement.submitted_by and reviewer == requirement.submitted_by.strip():
         raise HTTPException(status_code=409, detail="需求提交人不能审核自己的需求")
     if payload.action == "return" and not (payload.note or "").strip():
@@ -145,6 +151,47 @@ def review_requirement(
             note=payload.note,
             from_status=previous_status,
             to_status=target_status,
+        )
+    )
+    session.commit()
+    session.refresh(requirement)
+    return requirement
+
+
+@router.post("/{requirement_id}/assign-reviewer", response_model=RequirementRead)
+def assign_requirement_reviewer(
+    requirement_id: int,
+    payload: ReviewerAssignmentRequest,
+    session: Session = Depends(get_session),
+):
+    requirement = session.get(Requirement, requirement_id)
+    if requirement is None:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    if requirement.status not in {"new", "reviewing", "pending_review"}:
+        raise HTTPException(status_code=409, detail="当前需求状态不允许重新指派审核人")
+
+    reviewer = payload.reviewer.strip()
+    actor = payload.actor.strip()
+    if not reviewer or not actor:
+        raise HTTPException(status_code=400, detail="审核负责人和指派人不能为空")
+    if requirement.submitted_by and reviewer == requirement.submitted_by.strip():
+        raise HTTPException(status_code=409, detail="需求提交人不能被指派为审核人")
+
+    previous_status = requirement.status
+    requirement.assigned_reviewer = reviewer
+    if requirement.status in {"new", "reviewing"}:
+        requirement.status = "pending_review"
+    requirement.updated_at = utc_now()
+    session.add(requirement)
+    session.add(
+        ReviewEvent(
+            target_type="requirement",
+            target_id=requirement_id,
+            action="assign_reviewer",
+            actor=actor,
+            note=f"指派审核负责人：{reviewer}",
+            from_status=previous_status,
+            to_status=requirement.status,
         )
     )
     session.commit()

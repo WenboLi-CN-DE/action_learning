@@ -45,6 +45,7 @@ def _add_legacy_columns():
         "requirement",
         {
             "submitted_by": "VARCHAR(100)",
+            "assigned_reviewer": "VARCHAR(100)",
             "reviewed_by": "VARCHAR(100)",
             "reviewed_at": "DATETIME",
             "review_note": "VARCHAR(1000)",

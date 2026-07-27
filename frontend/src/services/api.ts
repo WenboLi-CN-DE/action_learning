@@ -112,6 +112,15 @@ export const reviewRequirement = (
     body: JSON.stringify(payload),
   })
 
+export const assignRequirementReviewer = (
+  requirementId: number,
+  payload: { reviewer: string; actor: string },
+) =>
+  fetchJSON<RequirementItem>(`/requirements/${requirementId}/assign-reviewer`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+
 export const transitionRequirement = (
   requirementId: number,
   payload: { target_status: string; actor: string; note?: string },
