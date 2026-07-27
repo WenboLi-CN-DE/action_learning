@@ -285,7 +285,7 @@
 }
 
 .creation-workbench .creation-form-panel {
-  width: min(720px, 100%);
+  width: min(1180px, 100%);
   border-color: #b8e6c1;
   box-shadow:
     inset 4px 0 0 #3dcd58,
@@ -295,6 +295,21 @@
 .creation-workbench .creation-form-panel h4.ant-typography {
   text-align: center;
   font-size: 22px;
+}
+
+.creation-form-content {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.creation-form-content .ai-structure-panel {
+  margin-bottom: 0;
+}
+
+.creation-details-form {
+  min-width: 0;
 }
 
 .creation-workbench .table-panel {
@@ -570,6 +585,10 @@
   }
 
   .workbench-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .creation-form-content {
     grid-template-columns: 1fr;
   }
 

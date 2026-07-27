@@ -849,38 +849,40 @@ export default function WorkbenchPage() {
                 <div className={`workbench-grid creation-workbench${capabilities.canManageProjects ? '' : ' read-only'}`}>
                   {capabilities.canManageProjects && <section className="form-panel creation-form-panel">
                     <Title level={4}>新建能力</Title>
-                    <AIStructurePanel
-                      title="AI 结构化能力描述"
-                      placeholder="例如：我们有一个面向数据中心的能耗分析 demo，可以帮助客户识别高耗能设备并给出优化建议..."
-                      rawText={projectRawText}
-                      result={projectAIResult}
-                      loading={projectAILoading}
-                      error={projectAIError}
-                      onRawTextChange={setProjectRawText}
-                      onStructure={runProjectStructuring}
-                      onApply={applyProjectAIResult}
-                      onImageRecognize={recognizeProjectImage}
-                    />
-                    <Form form={projectForm} layout="vertical" onFinish={submitProject} initialValues={{ status: 'researching', tag_ids: [] }}>
-                      <Form.Item name="name" label="能力名称" rules={[{ required: true, message: '请输入能力名称' }]}>
-                        <Input />
-                      </Form.Item>
-                      <Form.Item name="owner" label="负责人" rules={[{ required: true, message: '请输入负责人' }]}>
-                        <Input />
-                      </Form.Item>
-                      <Form.Item name="status" label="状态">
-                        <Select options={projectStatusOptions} />
-                      </Form.Item>
-                      <Form.Item name="tag_ids" label="标签">
-                        <Select mode="multiple" options={tagOptions} />
-                      </Form.Item>
-                      <Form.Item name="description" label="描述">
-                        <TextArea rows={4} />
-                      </Form.Item>
-                      <Button type="primary" htmlType="submit" icon={<PlusOutlined />} block>
-                        创建
-                      </Button>
-                    </Form>
+                    <div className="creation-form-content">
+                      <AIStructurePanel
+                        title="AI 结构化能力描述"
+                        placeholder="例如：我们有一个面向数据中心的能耗分析 demo，可以帮助客户识别高耗能设备并给出优化建议..."
+                        rawText={projectRawText}
+                        result={projectAIResult}
+                        loading={projectAILoading}
+                        error={projectAIError}
+                        onRawTextChange={setProjectRawText}
+                        onStructure={runProjectStructuring}
+                        onApply={applyProjectAIResult}
+                        onImageRecognize={recognizeProjectImage}
+                      />
+                      <Form className="creation-details-form" form={projectForm} layout="vertical" onFinish={submitProject} initialValues={{ status: 'researching', tag_ids: [] }}>
+                        <Form.Item name="name" label="能力名称" rules={[{ required: true, message: '请输入能力名称' }]}>
+                          <Input />
+                        </Form.Item>
+                        <Form.Item name="owner" label="负责人" rules={[{ required: true, message: '请输入负责人' }]}>
+                          <Input />
+                        </Form.Item>
+                        <Form.Item name="status" label="状态">
+                          <Select options={projectStatusOptions} />
+                        </Form.Item>
+                        <Form.Item name="tag_ids" label="标签">
+                          <Select mode="multiple" options={tagOptions} />
+                        </Form.Item>
+                        <Form.Item name="description" label="描述">
+                          <TextArea rows={4} />
+                        </Form.Item>
+                        <Button type="primary" htmlType="submit" icon={<PlusOutlined />} block>
+                          创建
+                        </Button>
+                      </Form>
+                    </div>
                   </section>}
                   <section className="table-panel">
                     <div className="table-toolbar">
@@ -905,48 +907,50 @@ export default function WorkbenchPage() {
                 <div className={`workbench-grid creation-workbench${capabilities.canCreateRequirement ? '' : ' read-only'}`}>
                   {capabilities.canCreateRequirement && <section className="form-panel creation-form-panel">
                     <Title level={4}>新建需求</Title>
-                    <AIStructurePanel
-                      title="AI 结构化需求描述"
-                      placeholder="例如：某数据中心客户希望降低 PUE，但目前缺少统一能耗分析，希望近期做一次节能评估..."
-                      rawText={requirementRawText}
-                      result={requirementAIResult}
-                      loading={requirementAILoading}
-                      error={requirementAIError}
-                      onRawTextChange={setRequirementRawText}
-                      onStructure={runRequirementStructuring}
-                      onApply={applyRequirementAIResult}
-                      onImageRecognize={recognizeRequirementImage}
-                    />
-                    <Form form={requirementForm} layout="vertical" onFinish={submitRequirement} initialValues={{ urgency: 'medium', status: 'pending_review', tag_ids: [] }}>
-                      <Form.Item name="title" label="需求标题" rules={[{ required: true, message: '请输入需求标题' }]}>
-                        <Input />
-                      </Form.Item>
-                      <Form.Item name="customer" label="客户" rules={[{ required: true, message: '请输入客户' }]}>
-                        <Input />
-                      </Form.Item>
-                      <Form.Item name="contact" label="联系人">
-                        <Input />
-                      </Form.Item>
-                      <Form.Item name="urgency" label="紧急度">
-                        <Select options={urgencyOptions} />
-                      </Form.Item>
-                      {role === 'admin' ? (
-                        <Form.Item name="status" label="状态">
-                          <Select options={requirementStatusOptions.filter((option) => !option.label.includes('历史'))} />
+                    <div className="creation-form-content">
+                      <AIStructurePanel
+                        title="AI 结构化需求描述"
+                        placeholder="例如：某数据中心客户希望降低 PUE，但目前缺少统一能耗分析，希望近期做一次节能评估..."
+                        rawText={requirementRawText}
+                        result={requirementAIResult}
+                        loading={requirementAILoading}
+                        error={requirementAIError}
+                        onRawTextChange={setRequirementRawText}
+                        onStructure={runRequirementStructuring}
+                        onApply={applyRequirementAIResult}
+                        onImageRecognize={recognizeRequirementImage}
+                      />
+                      <Form className="creation-details-form" form={requirementForm} layout="vertical" onFinish={submitRequirement} initialValues={{ urgency: 'medium', status: 'pending_review', tag_ids: [] }}>
+                        <Form.Item name="title" label="需求标题" rules={[{ required: true, message: '请输入需求标题' }]}>
+                          <Input />
                         </Form.Item>
-                      ) : (
-                        <Form.Item name="status" hidden><Input /></Form.Item>
-                      )}
-                      <Form.Item name="tag_ids" label="标签">
-                        <Select mode="multiple" options={tagOptions} />
-                      </Form.Item>
-                      <Form.Item name="description" label="描述" rules={[{ required: true, message: '请输入需求描述' }]}>
-                        <TextArea rows={4} />
-                      </Form.Item>
-                      <Button type="primary" htmlType="submit" icon={<PlusOutlined />} block>
-                        创建
-                      </Button>
-                    </Form>
+                        <Form.Item name="customer" label="客户" rules={[{ required: true, message: '请输入客户' }]}>
+                          <Input />
+                        </Form.Item>
+                        <Form.Item name="contact" label="联系人">
+                          <Input />
+                        </Form.Item>
+                        <Form.Item name="urgency" label="紧急度">
+                          <Select options={urgencyOptions} />
+                        </Form.Item>
+                        {role === 'admin' ? (
+                          <Form.Item name="status" label="状态">
+                            <Select options={requirementStatusOptions.filter((option) => !option.label.includes('历史'))} />
+                          </Form.Item>
+                        ) : (
+                          <Form.Item name="status" hidden><Input /></Form.Item>
+                        )}
+                        <Form.Item name="tag_ids" label="标签">
+                          <Select mode="multiple" options={tagOptions} />
+                        </Form.Item>
+                        <Form.Item name="description" label="描述" rules={[{ required: true, message: '请输入需求描述' }]}>
+                          <TextArea rows={4} />
+                        </Form.Item>
+                        <Button type="primary" htmlType="submit" icon={<PlusOutlined />} block>
+                          创建
+                        </Button>
+                      </Form>
+                    </div>
                   </section>}
                   <section className="table-panel">
                     <div className="table-toolbar">
