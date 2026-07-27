@@ -46,7 +46,7 @@ export interface MatchItem {
   ai_gaps: string[]
   ai_model: string | null
   created_by: string | null
-  review_status: 'pending' | 'approved' | 'rejected'
+  review_status: 'pending' | 'technical_pending' | 'final_pending' | 'approved' | 'rejected'
   reviewed_by: string | null
   reviewed_at: string | null
   review_note: string | null

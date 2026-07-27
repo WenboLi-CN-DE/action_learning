@@ -80,7 +80,7 @@ class ProjectRequirementMatch(SQLModel, table=True):
     ai_gaps: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     ai_model: str | None = Field(default=None, max_length=100)
     created_by: str | None = Field(default=None, max_length=100)
-    review_status: str = Field(default="pending", max_length=20)
+    review_status: str = Field(default="technical_pending", max_length=20)
     reviewed_by: str | None = Field(default=None, max_length=100)
     reviewed_at: datetime | None = Field(default=None)
     review_note: str | None = Field(default=None, max_length=1000)

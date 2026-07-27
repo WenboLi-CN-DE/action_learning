@@ -321,6 +321,23 @@
   gap: 18px;
 }
 
+.review-flow-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 22px;
+  border: 1px solid #b8e6c1;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f7fcf8, #edf8ef);
+  box-shadow: 0 10px 24px rgba(10, 47, 36, 0.08);
+}
+
+.review-flow-summary h3.ant-typography {
+  margin: 0 0 6px;
+  color: #0a2f24;
+}
+
 .review-queue h4.ant-typography {
   margin: 0;
 }
@@ -593,6 +610,11 @@
   }
 
   .dashboard-toolbar {
+    flex-direction: column;
+  }
+
+  .review-flow-summary {
+    align-items: flex-start;
     flex-direction: column;
   }
 

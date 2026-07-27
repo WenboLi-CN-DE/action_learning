@@ -123,7 +123,11 @@ export const transitionRequirement = (
 
 export const reviewMatch = (
   matchId: number,
-  payload: { action: 'approve' | 'reject'; reviewer: string; note?: string },
+  payload: {
+    action: 'technical_approve' | 'technical_reject' | 'final_approve' | 'final_reject'
+    reviewer: string
+    note?: string
+  },
 ) =>
   fetchJSON<MatchItem>(`/matches/${matchId}/review`, {
     method: 'POST',

@@ -1,17 +1,25 @@
 import { useState } from 'react'
-import { Button, Card, Empty, Popconfirm, Space, Table, Tag, Typography, message } from 'antd'
+import { Button, Card, Empty, Input, Modal, Popconfirm, Space, Table, Tag, Typography, message } from 'antd'
+import type { ColumnsType } from 'antd/es/table'
 
+import type { RoleId } from '../auth/permissions'
 import { reviewMatch, reviewRequirement } from '../services/api'
 import type { MatchItem, RequirementItem } from '../types'
 
 
 const { Text, Title } = Typography
+const { TextArea } = Input
+
+type MatchReviewAction = 'technical_approve' | 'technical_reject' | 'final_approve' | 'final_reject'
+type NoteAction =
+  | { target: 'requirement'; id: number; action: 'return'; title: string }
+  | { target: 'match'; id: number; action: 'technical_reject' | 'final_reject'; title: string }
 
 interface ReviewQueueProps {
   requirements: RequirementItem[]
   matches: MatchItem[]
   reviewer: string
-  canReviewRequirements: boolean
+  role: RoleId
   onReviewed: () => Promise<void>
 }
 
@@ -19,22 +27,26 @@ export default function ReviewQueue({
   requirements,
   matches,
   reviewer,
-  canReviewRequirements,
+  role,
   onReviewed,
 }: ReviewQueueProps) {
   const [workingKey, setWorkingKey] = useState<string | null>(null)
+  const [noteAction, setNoteAction] = useState<NoteAction | null>(null)
+  const [reviewNote, setReviewNote] = useState('')
   const [messageApi, contextHolder] = message.useMessage()
+  const isAdmin = role === 'admin'
   const pendingRequirements = requirements.filter((item) => item.status === 'pending_review')
   const assessmentRequirements = requirements.filter((item) => ['accepted', 'matching'].includes(item.status))
-  const pendingMatches = matches.filter((item) => item.review_status === 'pending')
+  const technicalPendingMatches = matches.filter((item) => ['pending', 'technical_pending'].includes(item.review_status))
+  const finalPendingMatches = matches.filter((item) => item.review_status === 'final_pending')
 
-  async function handleRequirement(id: number, action: 'approve' | 'return') {
+  async function handleRequirement(id: number, action: 'approve' | 'return', note?: string) {
     const key = `requirement-${id}`
     setWorkingKey(key)
     try {
-      await reviewRequirement(id, { action, reviewer })
+      await reviewRequirement(id, { action, reviewer, note })
       await onReviewed()
-      messageApi.success(action === 'approve' ? '需求已受理' : '需求已退回草稿')
+      messageApi.success(action === 'approve' ? '需求已受理并进入关联编排' : '需求已退回补充')
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : '需求审核失败')
     } finally {
@@ -42,26 +54,84 @@ export default function ReviewQueue({
     }
   }
 
-  async function handleMatch(id: number, action: 'approve' | 'reject') {
+  async function handleMatch(id: number, action: MatchReviewAction, note?: string) {
     const key = `match-${id}`
     setWorkingKey(key)
     try {
-      await reviewMatch(id, { action, reviewer })
+      await reviewMatch(id, { action, reviewer, note })
       await onReviewed()
-      messageApi.success(action === 'approve' ? '匹配已确认生效' : '匹配已拒绝')
+      const successMessages: Record<MatchReviewAction, string> = {
+        technical_approve: '技术确认完成，已提交管理员最终批准',
+        technical_reject: '该关联已被技术拒绝',
+        final_approve: '关联已最终批准并正式生效',
+        final_reject: '该关联未通过最终批准',
+      }
+      messageApi.success(successMessages[action])
     } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : '匹配审核失败')
+      messageApi.error(error instanceof Error ? error.message : '关联审核失败')
     } finally {
       setWorkingKey(null)
     }
   }
 
+  async function submitNoteAction() {
+    if (!noteAction || !reviewNote.trim()) return
+    const action = noteAction
+    const note = reviewNote.trim()
+    setNoteAction(null)
+    setReviewNote('')
+    if (action.target === 'requirement') {
+      await handleRequirement(action.id, action.action, note)
+    } else {
+      await handleMatch(action.id, action.action, note)
+    }
+  }
+
+  const matchColumns: ColumnsType<MatchItem> = [
+    { title: '需求', dataIndex: ['requirement', 'title'], key: 'requirement' },
+    { title: '能力', dataIndex: ['project', 'name'], key: 'project' },
+    {
+      title: '来源',
+      dataIndex: 'source',
+      key: 'source',
+      render: (value: string) => <Tag>{value === 'ai' ? 'AI 推荐' : '人工编排'}</Tag>,
+    },
+    {
+      title: '发起人',
+      dataIndex: 'created_by',
+      key: 'created_by',
+      render: (value: string | null) => value || '-',
+    },
+    {
+      title: '说明',
+      dataIndex: 'note',
+      key: 'note',
+      render: (value: string | null) => <Text type="secondary">{value || '-'}</Text>,
+    },
+  ]
+
   return (
     <div className="review-queue">
       {contextHolder}
-      {canReviewRequirements && (
+      <div className="review-flow-summary">
+        <div>
+          <Title level={3}>{isAdmin ? '管理审核中心' : '研发技术评估'}</Title>
+          <Text type="secondary">
+            {isAdmin
+              ? '审核销售需求、编排能力关联，并对研发确认后的关联执行最终批准。'
+              : '维护能力池，并对管理员发起的需求—能力关联进行技术可行性确认。'}
+          </Text>
+        </div>
+        <Space wrap>
+          {isAdmin && <Tag color="gold">待审核需求 {pendingRequirements.length}</Tag>}
+          <Tag color="blue">待技术确认 {technicalPendingMatches.length}</Tag>
+          {isAdmin && <Tag color="purple">待最终批准 {finalPendingMatches.length}</Tag>}
+        </Space>
+      </div>
+
+      {isAdmin && (
         <Card
-          title={<Title level={4}>待审核需求</Title>}
+          title={<Title level={4}>1. 待审核需求</Title>}
           extra={<Tag color="gold">{pendingRequirements.length} 条</Tag>}
         >
           {pendingRequirements.length === 0 ? (
@@ -80,14 +150,23 @@ export default function ReviewQueue({
                   key: 'action',
                   render: (_, record) => (
                     <Space>
-                      <Popconfirm title="确认受理该需求？" onConfirm={() => handleRequirement(record.id, 'approve')}>
+                      <Popconfirm title="确认受理该需求并进入关联编排？" onConfirm={() => handleRequirement(record.id, 'approve')}>
                         <Button type="primary" size="small" loading={workingKey === `requirement-${record.id}`}>
                           受理
                         </Button>
                       </Popconfirm>
-                      <Popconfirm title="确认退回补充信息？" onConfirm={() => handleRequirement(record.id, 'return')}>
-                        <Button size="small" danger>退回</Button>
-                      </Popconfirm>
+                      <Button
+                        size="small"
+                        danger
+                        onClick={() => setNoteAction({
+                          target: 'requirement',
+                          id: record.id,
+                          action: 'return',
+                          title: `退回需求：${record.title}`,
+                        })}
+                      >
+                        退回补充
+                      </Button>
                     </Space>
                   ),
                 },
@@ -97,7 +176,7 @@ export default function ReviewQueue({
         </Card>
       )}
 
-      {!canReviewRequirements && (
+      {!isAdmin && (
         <Card
           title={<Title level={4}>待评估需求收件箱</Title>}
           extra={<Tag color="gold">{assessmentRequirements.length} 条</Tag>}
@@ -125,52 +204,137 @@ export default function ReviewQueue({
         </Card>
       )}
 
-      <Card
-        title={<Title level={4}>待确认匹配</Title>}
-        extra={<Tag color="blue">{pendingMatches.length} 条</Tag>}
-      >
-        {pendingMatches.length === 0 ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无待确认匹配" />
-        ) : (
-          <Table
-            rowKey="id"
-            pagination={false}
-            dataSource={pendingMatches}
-            columns={[
-              { title: '需求', dataIndex: ['requirement', 'title'], key: 'requirement' },
-              { title: '能力', dataIndex: ['project', 'name'], key: 'project' },
-              {
-                title: '来源',
-                dataIndex: 'source',
-                key: 'source',
-                render: (value) => <Tag>{value === 'ai' ? 'AI 推荐' : '人工匹配'}</Tag>,
-              },
-              {
-                title: '说明',
-                dataIndex: 'note',
-                key: 'note',
-                render: (value) => <Text type="secondary">{value || '-'}</Text>,
-              },
-              {
-                title: '操作',
-                key: 'action',
-                render: (_, record) => (
-                  <Space>
-                    <Popconfirm title="确认该匹配生效？" onConfirm={() => handleMatch(record.id, 'approve')}>
-                      <Button type="primary" size="small" loading={workingKey === `match-${record.id}`}>
-                        确认
+      {!isAdmin && (
+        <Card
+          title={<Title level={4}>2. 待技术确认关联</Title>}
+          extra={<Tag color="blue">{technicalPendingMatches.length} 条</Tag>}
+        >
+          {technicalPendingMatches.length === 0 ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无待技术确认关联" />
+          ) : (
+            <Table
+              rowKey="id"
+              pagination={false}
+              dataSource={technicalPendingMatches}
+              columns={[
+                ...matchColumns,
+                {
+                  title: '操作',
+                  key: 'action',
+                  render: (_, record) => (
+                    <Space>
+                      <Popconfirm title="确认技术可行并提交管理员最终批准？" onConfirm={() => handleMatch(record.id, 'technical_approve')}>
+                        <Button type="primary" size="small" loading={workingKey === `match-${record.id}`}>
+                          技术确认
+                        </Button>
+                      </Popconfirm>
+                      <Button
+                        size="small"
+                        danger
+                        onClick={() => setNoteAction({
+                          target: 'match',
+                          id: record.id,
+                          action: 'technical_reject',
+                          title: `技术拒绝：${record.requirement.title} → ${record.project.name}`,
+                        })}
+                      >
+                        拒绝
                       </Button>
-                    </Popconfirm>
-                    <Popconfirm title="确认拒绝该匹配？" onConfirm={() => handleMatch(record.id, 'reject')}>
-                      <Button size="small" danger>拒绝</Button>
-                    </Popconfirm>
-                  </Space>
-                ),
-              },
-            ]}
-          />
-        )}
-      </Card>
+                    </Space>
+                  ),
+                },
+              ]}
+            />
+          )}
+        </Card>
+      )}
+
+      {isAdmin && (
+        <Card
+          title={<Title level={4}>2. 等待研发技术确认</Title>}
+          extra={<Tag color="blue">{technicalPendingMatches.length} 条</Tag>}
+        >
+          {technicalPendingMatches.length === 0 ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无等待研发确认的关联" />
+          ) : (
+            <Table rowKey="id" pagination={false} dataSource={technicalPendingMatches} columns={matchColumns} />
+          )}
+        </Card>
+      )}
+
+      {isAdmin && (
+        <Card
+          title={<Title level={4}>3. 待最终批准关联</Title>}
+          extra={<Tag color="purple">{finalPendingMatches.length} 条</Tag>}
+        >
+          {finalPendingMatches.length === 0 ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无待最终批准关联" />
+          ) : (
+            <Table
+              rowKey="id"
+              pagination={false}
+              dataSource={finalPendingMatches}
+              columns={[
+                ...matchColumns,
+                {
+                  title: '技术确认人',
+                  dataIndex: 'reviewed_by',
+                  key: 'reviewed_by',
+                  render: (value) => value || '-',
+                },
+                {
+                  title: '操作',
+                  key: 'action',
+                  render: (_, record) => (
+                    <Space>
+                      <Popconfirm title="确认该关联正式生效？" onConfirm={() => handleMatch(record.id, 'final_approve')}>
+                        <Button type="primary" size="small" loading={workingKey === `match-${record.id}`}>
+                          最终批准
+                        </Button>
+                      </Popconfirm>
+                      <Button
+                        size="small"
+                        danger
+                        onClick={() => setNoteAction({
+                          target: 'match',
+                          id: record.id,
+                          action: 'final_reject',
+                          title: `最终拒绝：${record.requirement.title} → ${record.project.name}`,
+                        })}
+                      >
+                        拒绝
+                      </Button>
+                    </Space>
+                  ),
+                },
+              ]}
+            />
+          )}
+        </Card>
+      )}
+
+      <Modal
+        title={noteAction?.title}
+        open={noteAction !== null}
+        okText="确认提交"
+        cancelText="取消"
+        confirmLoading={workingKey !== null}
+        okButtonProps={{ danger: true, disabled: !reviewNote.trim() }}
+        onOk={() => void submitNoteAction()}
+        onCancel={() => {
+          setNoteAction(null)
+          setReviewNote('')
+        }}
+      >
+        <Text type="secondary">审核意见将写入不可省略的流程记录，请明确说明原因和后续动作。</Text>
+        <TextArea
+          rows={4}
+          value={reviewNote}
+          placeholder="请输入审核意见"
+          onChange={(event) => setReviewNote(event.target.value)}
+          style={{ marginTop: 12 }}
+        />
+      </Modal>
     </div>
   )
 }

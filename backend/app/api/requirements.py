@@ -120,11 +120,18 @@ def review_requirement(
     target_status = {"approve": "accepted", "return": "draft"}.get(payload.action)
     if target_status is None:
         raise HTTPException(status_code=400, detail="Invalid review action")
+    reviewer = payload.reviewer.strip()
+    if not reviewer:
+        raise HTTPException(status_code=400, detail="审核人不能为空")
+    if requirement.submitted_by and reviewer == requirement.submitted_by.strip():
+        raise HTTPException(status_code=409, detail="需求提交人不能审核自己的需求")
+    if payload.action == "return" and not (payload.note or "").strip():
+        raise HTTPException(status_code=400, detail="退回需求时必须填写审核意见")
 
     previous_status = requirement.status
     reviewed_at = utc_now()
     requirement.status = target_status
-    requirement.reviewed_by = payload.reviewer
+    requirement.reviewed_by = reviewer
     requirement.reviewed_at = reviewed_at
     requirement.review_note = payload.note
     requirement.updated_at = reviewed_at
@@ -134,7 +141,7 @@ def review_requirement(
             target_type="requirement",
             target_id=requirement_id,
             action=payload.action,
-            actor=payload.reviewer,
+            actor=reviewer,
             note=payload.note,
             from_status=previous_status,
             to_status=target_status,
@@ -184,7 +191,8 @@ def analyze_requirement_matches(
     existing_ids = set(
         session.exec(
             select(ProjectRequirementMatch.project_id).where(
-                ProjectRequirementMatch.requirement_id == requirement_id
+                ProjectRequirementMatch.requirement_id == requirement_id,
+                ProjectRequirementMatch.review_status != "rejected",
             )
         ).all()
     )

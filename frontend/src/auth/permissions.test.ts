@@ -11,6 +11,7 @@ test('销售以需求池为主，只能维护需求', () => {
   assert.equal(capabilities.canCreateRequirement, true)
   assert.equal(capabilities.canEditRequirement, true)
   assert.equal(capabilities.canManageProjects, false)
+  assert.equal(capabilities.canCreateMatches, false)
   assert.equal(capabilities.canReviewRequirements, false)
   assert.equal(capabilities.canReviewMatches, false)
   assert.equal(capabilities.canManageKnowledge, false)
@@ -24,19 +25,21 @@ test('研发以能力池为主，可以维护能力并确认匹配', () => {
   assert.equal(capabilities.canCreateRequirement, false)
   assert.equal(capabilities.canEditRequirement, false)
   assert.equal(capabilities.canManageProjects, true)
+  assert.equal(capabilities.canCreateMatches, false)
   assert.equal(capabilities.canReviewRequirements, false)
   assert.equal(capabilities.canReviewMatches, true)
   assert.equal(capabilities.canManageKnowledge, false)
 })
 
 
-test('管理员拥有审核和知识库管理能力', () => {
+test('管理员只负责审核、关联编排和知识库管理', () => {
   const capabilities = getRoleCapabilities('admin')
 
-  assert.equal(capabilities.defaultTab, 'dashboard')
-  assert.equal(capabilities.canCreateRequirement, true)
-  assert.equal(capabilities.canEditRequirement, true)
-  assert.equal(capabilities.canManageProjects, true)
+  assert.equal(capabilities.defaultTab, 'reviews')
+  assert.equal(capabilities.canCreateRequirement, false)
+  assert.equal(capabilities.canEditRequirement, false)
+  assert.equal(capabilities.canManageProjects, false)
+  assert.equal(capabilities.canCreateMatches, true)
   assert.equal(capabilities.canReviewRequirements, true)
   assert.equal(capabilities.canReviewMatches, true)
   assert.equal(capabilities.canManageKnowledge, true)

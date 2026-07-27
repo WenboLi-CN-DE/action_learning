@@ -85,7 +85,21 @@ def test_admin_can_return_requirement_to_draft():
     assert response.json()["status"] == "draft"
 
 
-def test_match_requires_review_before_it_becomes_effective():
+def test_returning_requirement_requires_a_review_note():
+    requirement = _create_requirement()
+
+    response = client.post(
+        f"/api/v1/requirements/{requirement['id']}/review",
+        json={
+            "action": "return",
+            "reviewer": "王管理员",
+        },
+    )
+
+    assert response.status_code == 400
+
+
+def test_match_requires_technical_confirmation_and_final_approval():
     requirement = _create_requirement(status="accepted")
     project = _create_project()
 
@@ -96,31 +110,57 @@ def test_match_requires_review_before_it_becomes_effective():
             "requirement_id": requirement["id"],
             "coverage_status": "partial",
             "note": "能力方向匹配，需确认数据接口。",
-            "created_by": "李研发",
+            "created_by": "王管理员",
         },
     )
 
     assert created.status_code == 201
-    assert created.json()["review_status"] == "pending"
+    assert created.json()["review_status"] == "technical_pending"
 
-    approved = client.post(
+    technical_approved = client.post(
         f"/api/v1/matches/{created.json()['id']}/review",
         json={
-            "action": "approve",
+            "action": "technical_approve",
             "reviewer": "赵研发",
             "note": "确认能力可进入联合方案设计。",
         },
     )
 
-    assert approved.status_code == 200
-    assert approved.json()["review_status"] == "approved"
-    assert approved.json()["reviewed_by"] == "赵研发"
-    assert approved.json()["reviewed_at"] is not None
+    assert technical_approved.status_code == 200
+    assert technical_approved.json()["review_status"] == "final_pending"
+    assert technical_approved.json()["reviewed_by"] == "赵研发"
 
-    refreshed_requirement = client.get(
+    requirement_before_final_approval = client.get(
         f"/api/v1/requirements/{requirement['id']}"
     ).json()
-    assert refreshed_requirement["status"] == "matched"
+    assert requirement_before_final_approval["status"] == "matching"
+
+    final_approved = client.post(
+        f"/api/v1/matches/{created.json()['id']}/review",
+        json={
+            "action": "final_approve",
+            "reviewer": "李管理员",
+            "note": "审核链完整，同意正式生效。",
+        },
+    )
+
+    assert final_approved.status_code == 200
+    assert final_approved.json()["review_status"] == "approved"
+    assert final_approved.json()["reviewed_by"] == "李管理员"
+    assert final_approved.json()["reviewed_at"] is not None
+
+    requirement_after_final_approval = client.get(
+        f"/api/v1/requirements/{requirement['id']}"
+    ).json()
+    assert requirement_after_final_approval["status"] == "matched"
+
+    events = client.get(
+        f"/api/v1/review-events?target_type=match&target_id={created.json()['id']}"
+    ).json()
+    assert [event["action"] for event in events[-2:]] == [
+        "technical_approve",
+        "final_approve",
+    ]
 
 
 def test_rejecting_the_last_pending_match_returns_requirement_to_accepted():
@@ -132,14 +172,14 @@ def test_rejecting_the_last_pending_match_returns_requirement_to_accepted():
             "project_id": project["id"],
             "requirement_id": requirement["id"],
             "coverage_status": "partial",
-            "created_by": "李研发",
+            "created_by": "王管理员",
         },
     ).json()
 
     rejected = client.post(
         f"/api/v1/matches/{created['id']}/review",
         json={
-            "action": "reject",
+            "action": "technical_reject",
             "reviewer": "赵研发",
             "note": "当前能力范围不足。",
         },
@@ -151,6 +191,54 @@ def test_rejecting_the_last_pending_match_returns_requirement_to_accepted():
         f"/api/v1/requirements/{requirement['id']}"
     ).json()
     assert refreshed_requirement["status"] == "accepted"
+
+
+def test_match_creator_cannot_review_own_association():
+    requirement = _create_requirement(status="accepted")
+    project = _create_project()
+    created = client.post(
+        "/api/v1/matches",
+        json={
+            "project_id": project["id"],
+            "requirement_id": requirement["id"],
+            "coverage_status": "partial",
+            "created_by": "王管理员",
+        },
+    ).json()
+
+    response = client.post(
+        f"/api/v1/matches/{created['id']}/review",
+        json={
+            "action": "technical_approve",
+            "reviewer": "王管理员",
+        },
+    )
+
+    assert response.status_code == 409
+
+
+def test_rejecting_a_match_requires_a_review_note():
+    requirement = _create_requirement(status="accepted")
+    project = _create_project()
+    created = client.post(
+        "/api/v1/matches",
+        json={
+            "project_id": project["id"],
+            "requirement_id": requirement["id"],
+            "coverage_status": "partial",
+            "created_by": "王管理员",
+        },
+    ).json()
+
+    response = client.post(
+        f"/api/v1/matches/{created['id']}/review",
+        json={
+            "action": "technical_reject",
+            "reviewer": "赵研发",
+        },
+    )
+
+    assert response.status_code == 400
 
 
 def test_invalid_requirement_review_transition_is_rejected():

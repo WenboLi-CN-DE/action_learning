@@ -142,6 +142,10 @@ function reviewActionLabel(action: string) {
     approve: '受理',
     return: '退回',
     transition: '状态变更',
+    technical_approve: '技术确认',
+    technical_reject: '技术拒绝',
+    final_approve: '最终批准',
+    final_reject: '最终拒绝',
     match_approved: '匹配确认',
     match_rejected: '匹配拒绝',
   }
@@ -238,7 +242,9 @@ export default function WorkbenchPage() {
   )
 
   const requirementOptions = useMemo(
-    () => requirements.map((requirement) => ({ label: requirement.title, value: requirement.id })),
+    () => requirements
+      .filter((requirement) => ['accepted', 'matching'].includes(requirement.status))
+      .map((requirement) => ({ label: requirement.title, value: requirement.id })),
     [requirements],
   )
 
@@ -353,7 +359,7 @@ export default function WorkbenchPage() {
     await createMatch({ ...values, created_by: displayName })
     matchForm.resetFields()
     await loadData()
-    messageApi.success('匹配已保存')
+    messageApi.success('关联已发起，等待研发技术确认')
   }
 
   async function runProjectStructuring() {
@@ -533,7 +539,7 @@ export default function WorkbenchPage() {
       ),
     } : current)
     await loadData()
-    messageApi.success('AI 推荐已提交，等待研发或管理员确认')
+    messageApi.success('AI 推荐关联已发起，等待研发技术确认')
   }
 
   async function submitComment(values: Pick<CommentPayload, 'author' | 'content'>) {
@@ -671,7 +677,7 @@ export default function WorkbenchPage() {
 
   const matchColumns: ColumnsType<MatchItem> = [
     { title: '需求', dataIndex: ['requirement', 'title'], key: 'requirement', width: 220 },
-    { title: '项目', dataIndex: ['project', 'name'], key: 'project', width: 220 },
+    { title: '能力', dataIndex: ['project', 'name'], key: 'project', width: 220 },
     {
       title: '覆盖状态',
       dataIndex: 'coverage_status',
@@ -686,7 +692,13 @@ export default function WorkbenchPage() {
       width: 110,
       render: (value: MatchItem['review_status']) => (
         <AntTag color={value === 'approved' ? 'green' : value === 'rejected' ? 'red' : 'blue'}>
-          {value === 'approved' ? '已确认' : value === 'rejected' ? '已拒绝' : '待确认'}
+          {value === 'approved'
+            ? '已生效'
+            : value === 'rejected'
+              ? '已拒绝'
+              : value === 'final_pending'
+                ? '待最终批准'
+                : '待技术确认'}
         </AntTag>
       ),
     },
@@ -709,7 +721,7 @@ export default function WorkbenchPage() {
   const visibleTabKeys = role === 'admin'
     ? ['dashboard', 'projects', 'requirements', 'reviews', 'tags', 'matches']
     : role === 'research'
-      ? ['projects', 'requirements', 'reviews', 'matches']
+      ? ['projects', 'requirements', 'reviews']
       : ['requirements', 'projects']
 
   return (
@@ -753,20 +765,37 @@ export default function WorkbenchPage() {
       <Content className="app-content">
         {error && <Alert type="error" message="数据请求失败" description={error} showIcon className="app-alert" />}
 
-        <div className="metric-strip">
-          <div className="metric-card">
-            <Statistic title="能力池" value={projects.length} />
+        {role === 'admin' ? (
+          <div className="metric-strip">
+            <div className="metric-card">
+              <Statistic title="待审核需求" value={requirements.filter((item) => item.status === 'pending_review').length} />
+            </div>
+            <div className="metric-card">
+              <Statistic title="待研发确认" value={matches.filter((item) => ['pending', 'technical_pending'].includes(item.review_status)).length} />
+            </div>
+            <div className="metric-card">
+              <Statistic title="待最终批准" value={matches.filter((item) => item.review_status === 'final_pending').length} />
+            </div>
+            <div className="metric-card">
+              <Statistic title="已生效关联" value={matches.filter((item) => item.review_status === 'approved').length} />
+            </div>
           </div>
-          <div className="metric-card">
-            <Statistic title="需求池" value={requirements.length} />
+        ) : (
+          <div className="metric-strip">
+            <div className="metric-card">
+              <Statistic title="能力池" value={projects.length} />
+            </div>
+            <div className="metric-card">
+              <Statistic title="需求池" value={requirements.length} />
+            </div>
+            <div className="metric-card">
+              <Statistic title="标签" value={tags.length} />
+            </div>
+            <div className="metric-card">
+              <Statistic title="匹配关系" value={matches.length} />
+            </div>
           </div>
-          <div className="metric-card">
-            <Statistic title="标签" value={tags.length} />
-          </div>
-          <div className="metric-card">
-            <Statistic title="匹配关系" value={matches.length} />
-          </div>
-        </div>
+        )}
 
         <Tabs
           className="workbench-tabs"
@@ -968,7 +997,9 @@ export default function WorkbenchPage() {
                         {filteredRequirements.map((requirement) => {
                           const requirementMatches = matches.filter((item) => item.requirement_id === requirement.id)
                           const approvedMatches = requirementMatches.filter((item) => item.review_status === 'approved')
-                          const pendingMatches = requirementMatches.filter((item) => item.review_status === 'pending')
+                          const pendingMatches = requirementMatches.filter((item) =>
+                            ['pending', 'technical_pending', 'final_pending'].includes(item.review_status),
+                          )
                           const progress = approvedMatches.length > 0 ? 100 : pendingMatches.length > 0 ? 65 : requirement.status === 'accepted' ? 35 : 15
                           return (
                             <Card
@@ -1010,13 +1041,13 @@ export default function WorkbenchPage() {
             },
             {
               key: 'reviews',
-              label: '审核队列',
+              label: role === 'admin' ? '管理审核' : '技术评估',
               children: (
                 <ReviewQueue
                   requirements={requirements}
                   matches={matches}
                   reviewer={displayName}
-                  canReviewRequirements={capabilities.canReviewRequirements}
+                  role={role}
                   onReviewed={loadData}
                 />
               ),
@@ -1048,11 +1079,12 @@ export default function WorkbenchPage() {
             },
             {
               key: 'matches',
-              label: '匹配',
+              label: '关联编排',
               children: (
-                <div className="workbench-grid">
-                  <section className="form-panel">
-                    <Title level={4}>新建匹配</Title>
+                <div className={`workbench-grid${capabilities.canCreateMatches ? '' : ' read-only'}`}>
+                  {capabilities.canCreateMatches && <section className="form-panel">
+                    <Title level={4}>手动关联（补充通道）</Title>
+                    <Text type="secondary">优先在需求详情中使用 AI 推荐；这里用于人工补充需求—能力关联。</Text>
                     <Form form={matchForm} layout="vertical" onFinish={submitMatch} initialValues={{ coverage_status: 'partial' }}>
                       <Form.Item name="requirement_id" label="需求" rules={[{ required: true, message: '请选择需求' }]}>
                         <Select showSearch optionFilterProp="label" options={requirementOptions} />
@@ -1067,10 +1099,10 @@ export default function WorkbenchPage() {
                         <TextArea rows={4} />
                       </Form.Item>
                       <Button type="primary" htmlType="submit" icon={<LinkOutlined />} block>
-                        保存
+                        发起技术确认
                       </Button>
                     </Form>
-                  </section>
+                  </section>}
                   <section className="table-panel">
                     <Table rowKey="id" columns={matchColumns} dataSource={matches} loading={loading} pagination={false} scroll={{ x: 760 }} />
                   </section>
@@ -1172,14 +1204,14 @@ export default function WorkbenchPage() {
                   key={recommendation.project_id}
                   size="small"
                   title={`${recommendation.project.name} · ${recommendation.score.toFixed(0)} 分`}
-                  extra={capabilities.canReviewMatches ? (
+                  extra={capabilities.canCreateMatches ? (
                     <Button
                       type="primary"
                       size="small"
                       disabled={recommendation.already_confirmed}
                       onClick={() => confirmAIRecommendation(recommendation)}
                     >
-                      {recommendation.already_confirmed ? '已提交' : '提交匹配'}
+                      {recommendation.already_confirmed ? '已提交' : '发起技术确认'}
                     </Button>
                   ) : null}
                 >
@@ -1198,7 +1230,7 @@ export default function WorkbenchPage() {
                 </Card>
               ))}
               {aiMatchResult.recommendations.length === 0 && <Empty description="暂无合适候选能力" />}
-              <Text type="secondary">模型：{aiMatchResult.model}。AI 推荐需人工确认后才会成为正式关联。</Text>
+              <Text type="secondary">模型：{aiMatchResult.model}。AI 推荐需研发技术确认和管理员最终批准后才会正式生效。</Text>
             </Space>
           )}
           <Divider>审核记录</Divider>

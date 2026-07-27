@@ -1,10 +1,11 @@
 export type RoleId = 'sales' | 'research' | 'admin'
 
 export interface RoleCapabilities {
-  defaultTab: 'dashboard' | 'projects' | 'requirements'
+  defaultTab: 'dashboard' | 'projects' | 'requirements' | 'reviews'
   canCreateRequirement: boolean
   canEditRequirement: boolean
   canManageProjects: boolean
+  canCreateMatches: boolean
   canReviewRequirements: boolean
   canReviewMatches: boolean
   canManageKnowledge: boolean
@@ -16,6 +17,7 @@ const CAPABILITIES: Record<RoleId, RoleCapabilities> = {
     canCreateRequirement: true,
     canEditRequirement: true,
     canManageProjects: false,
+    canCreateMatches: false,
     canReviewRequirements: false,
     canReviewMatches: false,
     canManageKnowledge: false,
@@ -25,15 +27,17 @@ const CAPABILITIES: Record<RoleId, RoleCapabilities> = {
     canCreateRequirement: false,
     canEditRequirement: false,
     canManageProjects: true,
+    canCreateMatches: false,
     canReviewRequirements: false,
     canReviewMatches: true,
     canManageKnowledge: false,
   },
   admin: {
-    defaultTab: 'dashboard',
-    canCreateRequirement: true,
-    canEditRequirement: true,
-    canManageProjects: true,
+    defaultTab: 'reviews',
+    canCreateRequirement: false,
+    canEditRequirement: false,
+    canManageProjects: false,
+    canCreateMatches: true,
     canReviewRequirements: true,
     canReviewMatches: true,
     canManageKnowledge: true,

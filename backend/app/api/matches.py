@@ -35,6 +35,27 @@ def create_match(
     ).first()
     if existing is not None:
         response.status_code = status.HTTP_200_OK
+        if existing.review_status == "rejected":
+            existing.coverage_status = payload.coverage_status
+            existing.note = payload.note
+            existing.source = payload.source
+            existing.ai_score = payload.ai_score
+            existing.ai_reason = payload.ai_reason
+            existing.ai_gaps = payload.ai_gaps
+            existing.ai_model = payload.ai_model
+            existing.created_by = payload.created_by
+            existing.review_status = "technical_pending"
+            existing.reviewed_by = None
+            existing.reviewed_at = None
+            existing.review_note = None
+            existing.updated_at = utc_now()
+            if requirement.status == "accepted":
+                requirement.status = "matching"
+                requirement.updated_at = utc_now()
+                session.add(requirement)
+            session.add(existing)
+            session.commit()
+            session.refresh(existing)
         return existing
 
     match = ProjectRequirementMatch(
@@ -68,17 +89,37 @@ def review_match(
     match = session.get(ProjectRequirementMatch, match_id)
     if match is None:
         raise HTTPException(status_code=404, detail="Match not found")
-    if match.review_status != "pending":
-        raise HTTPException(status_code=409, detail="仅待确认匹配可以执行审核")
 
-    target_status = {"approve": "approved", "reject": "rejected"}.get(payload.action)
-    if target_status is None:
+    current_status = (
+        "technical_pending" if match.review_status == "pending" else match.review_status
+    )
+    transitions = {
+        "technical_approve": ({"technical_pending"}, "final_pending"),
+        "technical_reject": ({"technical_pending"}, "rejected"),
+        "final_approve": ({"final_pending"}, "approved"),
+        "final_reject": ({"final_pending"}, "rejected"),
+    }
+    transition = transitions.get(payload.action)
+    if transition is None:
         raise HTTPException(status_code=400, detail="Invalid review action")
+    allowed_statuses, target_status = transition
+    if current_status not in allowed_statuses:
+        raise HTTPException(status_code=409, detail="当前关联状态不允许执行该审核操作")
+
+    reviewer = payload.reviewer.strip()
+    if not reviewer:
+        raise HTTPException(status_code=400, detail="审核人不能为空")
+    if match.created_by and reviewer == match.created_by.strip():
+        raise HTTPException(status_code=409, detail="关联发起人不能审核自己创建的关联")
+    if current_status == "final_pending" and match.reviewed_by == reviewer:
+        raise HTTPException(status_code=409, detail="技术确认人与最终审批人不能是同一人")
+    if payload.action.endswith("reject") and not (payload.note or "").strip():
+        raise HTTPException(status_code=400, detail="拒绝关联时必须填写审核意见")
 
     previous_status = match.review_status
     reviewed_at = utc_now()
     match.review_status = target_status
-    match.reviewed_by = payload.reviewer
+    match.reviewed_by = reviewer
     match.reviewed_at = reviewed_at
     match.review_note = payload.note
     match.updated_at = reviewed_at
@@ -94,17 +135,23 @@ def review_match(
                 target_type="requirement",
                 target_id=requirement.id,
                 action="match_approved",
-                actor=payload.reviewer,
+                actor=reviewer,
                 note=payload.note,
                 from_status=previous_requirement_status,
                 to_status="matched",
             )
-    elif requirement is not None and requirement.status == "matching":
+    elif (
+        target_status == "rejected"
+        and requirement is not None
+        and requirement.status == "matching"
+    ):
         remaining_active_match = session.exec(
             select(ProjectRequirementMatch).where(
                 ProjectRequirementMatch.requirement_id == requirement.id,
                 ProjectRequirementMatch.id != match_id,
-                ProjectRequirementMatch.review_status.in_(["pending", "approved"]),
+                ProjectRequirementMatch.review_status.in_(
+                    ["pending", "technical_pending", "final_pending", "approved"]
+                ),
             )
         ).first()
         if remaining_active_match is None:
@@ -115,7 +162,7 @@ def review_match(
                 target_type="requirement",
                 target_id=requirement.id,
                 action="match_rejected",
-                actor=payload.reviewer,
+                actor=reviewer,
                 note=payload.note,
                 from_status="matching",
                 to_status="accepted",
@@ -126,7 +173,7 @@ def review_match(
             target_type="match",
             target_id=match_id,
             action=payload.action,
-            actor=payload.reviewer,
+            actor=reviewer,
             note=payload.note,
             from_status=previous_status,
             to_status=target_status,
