@@ -1,133 +1,135 @@
-# 内网部署验证流程
+# AI 工坊生产部署与验证
 
-## 目标
-确认平台可部署到公司内网服务器，团队成员可通过内网 IP/域名访问平台。
+## 当前生产基线
 
-## 当前已知信息
-- 开发环境：Windows，Python 3.12+，Node.js 18+
-- 后端启动方式：`uv run uvicorn app.main:app --host 0.0.0.0 --port 8000`
-- 前端构建方式：`npm run build` → `dist/` 目录
-- 数据库：SQLite 单文件 `database.db`，零运维
+| 项目 | 当前值 |
+|------|--------|
+| 云主机 | 阿里云 Ubuntu 24.04 LTS |
+| SSH 别名 | `aliyun-home-tunnel` |
+| 公网地址 | `8.152.171.142` |
+| 平台入口 | <http://8.152.171.142/> |
+| 部署目录 | `/opt/action_learning` |
+| 后端服务 | `action-learning` |
+| 服务用户 | `actionlearning` |
+| 后端监听 | `127.0.0.1:18000` |
+| 前端 | Nginx 静态文件 |
+| 内部备用监听 | `0.0.0.0:18080` |
+| 环境配置 | `/etc/action-learning.env` |
+| 数据库 | `/opt/action_learning/backend/database.db` |
 
-## 待确认事项（🔴 需在执行前确认）
-- ❓ 内网服务器操作系统（Windows/Linux？）
-- ❓ 服务器是否可安装 Python 3.12+ 和 Node.js 18+？
-- ❓ 服务器是否有网络访问 PyPI/npm（安装依赖）？若无，需离线安装方案
-- ❓ 服务器可用端口（8000 后端 + 5173 前端？）
-- ❓ 团队成员如何访问内网服务器（IP地址/域名/VPN？）
+生产环境已经部署并通过健康检查。本文件记录现状和安全边界，不再使用早期“待确认内网服务器”的假设。
 
-## 本地一键启动
+## 网络与站点边界
 
-Windows PowerShell：
+服务器的 80 端口由 Nginx 共享。本项目只使用 IP/default server 入口，部署时必须满足：
 
-```powershell
-.\scripts\dev.ps1
-```
+- 不修改系统代理、WireGuard、路由、DNS 或 SSH 配置；
+- 不占用服务器已有的 `8000`、`8080`、`8081` 端口；
+- 不改变 `rednote.wenbo.space` 等已有域名站点；
+- 后端只监听 `127.0.0.1:18000`，不直接暴露公网；
+- 修改 Nginx 前先备份和执行 `nginx -t`；
+- 只 reload Nginx，不做无必要的整机或网络服务重启。
 
-macOS / Linux：
+## 连接前检查
 
-```bash
-./scripts/dev.sh
-```
-
-默认启动：
-
-- 后端：`http://127.0.0.1:8000`
-- 前端：`http://127.0.0.1:5173`
-
-端口冲突时：
-
-```powershell
-.\scripts\dev.ps1 -BackendPort 8001 -FrontendPort 5174
-```
+部署前使用现有 SSH 别名，不硬编码密码或修改密钥：
 
 ```bash
-./scripts/dev.sh --backend-port 8001 --frontend-port 5174
+ssh -G aliyun-home-tunnel | sed -n \
+  -e 's/^hostname /hostname /p' \
+  -e 's/^user /user /p' \
+  -e 's/^identityfile /identityfile /p' \
+  -e 's/^proxyjump /proxyjump /p'
 ```
 
-## 推荐部署方案：Ubuntu + Nginx + systemd
-
-该方案适合当前 MVP：
-
-- Nginx serve 前端 `frontend/dist`
-- Nginx 反向代理 `/api/`、`/docs`、`/openapi.json` 到 FastAPI
-- systemd 托管后端进程
-- SQLite 文件保存在 `backend/database.db`
-
-### 服务器前置条件
-
-服务器需提前安装：
-
-- `git`
-- `uv`
-- `Node.js 18+ / npm`
-- `nginx`
-- 可执行 `sudo`
-
-### 一键部署
-
-在服务器已有仓库目录中运行：
+然后只读检查远端：
 
 ```bash
-sudo env APP_DIR=/opt/action_learning SERVICE_USER=wenbo bash scripts/deploy-ubuntu.sh
+ssh aliyun-home-tunnel '
+  uname -a
+  systemctl is-active action-learning nginx
+  ss -lntp
+  nginx -T >/tmp/action-learning-nginx-check.txt 2>&1
+  test -d /opt/action_learning
+'
 ```
 
-如果服务器还没有代码，可以先克隆：
+不得在检查阶段更改网络配置。
+
+## 部署保护清单
+
+以下内容不允许被本地同步覆盖：
+
+- `/etc/action-learning.env`
+- `/opt/action_learning/backend/database.db`
+- `/opt/action_learning/backend/.env`
+- `/opt/action_learning/backend/.venv`
+- `/opt/action_learning/frontend/node_modules`
+- 本地构建目录和临时文件
+- Nginx 中与其他站点相关的配置
+
+前端发布时保留服务器已有的 `.well-known` 等运维目录。
+
+每次部署前应创建带日期和 commit SHA 的备份目录：
+
+```text
+/opt/action_learning-backups/<YYYYMMDD-HHMMSS>-<commit-sha>/
+```
+
+至少备份：
+
+- 当前前端 `dist/`；
+- 当前后端应用代码；
+- `database.db`；
+- 本项目 systemd unit；
+- 本项目 Nginx 配置。
+
+## 推荐发布流程
+
+### 1. 本地验证
 
 ```bash
-git -c http.proxy="" -c https.proxy="" clone https://github.schneider-electric.com/SESA783337/action_learning.git
-cd action_learning
-sudo env APP_DIR=/opt/action_learning SERVICE_USER=wenbo bash scripts/deploy-ubuntu.sh
+cd backend
+uv run pytest
 ```
-
-### 可选环境变量
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `APP_DIR` | `/opt/action_learning` | 服务器部署目录 |
-| `REPO_URL` | Schneider GitHub 仓库地址 | 代码仓库 |
-| `BRANCH` | `master` | 部署分支 |
-| `SERVICE_USER` | `wenbo` | systemd 运行用户 |
-| `BACKEND_HOST` | `127.0.0.1` | 后端监听地址 |
-| `BACKEND_PORT` | `8000` | 后端监听端口 |
-| `NGINX_SITE` | `action-learning` | Nginx site 名称 |
-
-### LLM 环境变量
-
-AI 结构化输入默认使用 Qwen OpenAI-compatible API。推荐在 systemd 服务环境中配置：
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `QWEN_API_KEY` | 无 | 系统默认 Qwen API key，未配置时用户仍可手动录入或在页面设置中临时覆盖 |
-| `QWEN_MODEL` | `qwen3.6-plus` | 默认模型 |
-| `QWEN_BASE_URL` | DashScope OpenAI-compatible endpoint | 兼容接口地址 |
-
-API key 不写入 SQLite。页面右上角“设置”只保存当前浏览器的临时覆盖配置。
-
-部署模板会读取可选环境文件 `/etc/action-learning.env`。可用以下方式配置：
 
 ```bash
-sudo tee /etc/action-learning.env >/dev/null <<'EOF'
-QWEN_API_KEY=sk-...
-QWEN_MODEL=qwen3.6-plus
-EOF
-sudo systemctl restart action-learning
+cd frontend
+npm test
+npm run lint
+npm run build
 ```
 
-### 部署后验证
+### 2. 确认发布版本
 
 ```bash
-curl http://127.0.0.1:8000/api/v1/health
-systemctl status action-learning
-nginx -t
+git status --short
+git rev-parse --short HEAD
+git log -1 --oneline
 ```
 
-团队访问：
+发布应绑定明确 commit，避免把未提交文件直接混入生产。
 
-- 平台入口：`http://[服务器IP]/`
-- API 文档：`http://[服务器IP]/docs`
+### 3. 备份远端
 
-### 手动部署流程
+先确认 `/opt/action_learning` 和数据库文件，再创建精确目标的备份。不要使用指向宽泛目录的递归删除或覆盖命令。
+
+### 4. 同步代码
+
+可使用 Git 或受控的 `rsync`，但必须应用上述排除项。Schneider GitHub 拉取/推送时显式关闭 HTTP/HTTPS proxy；这只影响该次 Git 命令，不更改主机网络配置。
+
+仓库中的 `scripts/deploy-ubuntu.sh`、`deploy/action-learning.service` 和 `deploy/nginx.conf` 是通用基础模板，默认用户/端口与当前生产值不同。不得在生产上无参数直接执行并覆盖现有配置；当前生产应使用：
+
+```text
+SERVICE_USER=actionlearning
+BACKEND_HOST=127.0.0.1
+BACKEND_PORT=18000
+APP_DIR=/opt/action_learning
+```
+
+共享 Nginx 环境仍需人工核对生成结果。
+
+### 5. 安装依赖与构建
 
 ```bash
 cd /opt/action_learning/backend
@@ -136,27 +138,79 @@ uv sync
 cd /opt/action_learning/frontend
 npm install
 npm run build
-
-sudo cp /opt/action_learning/deploy/action-learning.service /etc/systemd/system/action-learning.service
-sudo systemctl daemon-reload
-sudo systemctl enable action-learning
-sudo systemctl restart action-learning
-
-sudo cp /opt/action_learning/deploy/nginx.conf /etc/nginx/sites-available/action-learning
-sudo ln -sfn /etc/nginx/sites-available/action-learning /etc/nginx/sites-enabled/action-learning
-sudo nginx -t
-sudo systemctl reload nginx
 ```
 
-## Windows 服务器备选方案
+### 6. 重启应用
 
-Windows 服务器可先用开发式部署：
+```bash
+systemctl daemon-reload
+systemctl restart action-learning
+systemctl is-active action-learning
+```
 
-1. 安装 uv + Node.js 18+
-2. `.\scripts\dev.ps1 -BackendPort 8000 -FrontendPort 5173`
-3. 通过防火墙开放前端端口
+只有本项目 Nginx 配置确实变化时才执行：
 
-长期运行建议后续再补 Windows Service 或 IIS/Nginx for Windows 配置。
+```bash
+nginx -t
+systemctl reload nginx
+```
+
+## AI / RAG 环境
+
+生产环境变量放在 `/etc/action-learning.env`，部署不得覆盖或在日志中打印密钥。主要变量包括：
+
+- `QWEN_API_KEY`
+- `QWEN_MODEL`
+- `QWEN_BASE_URL`
+- `RAG_BACKEND`
+- `RAG_QDRANT_URL`
+- `RAG_QDRANT_API_KEY`
+- `RAG_COLLECTION_NAME`
+
+浏览器中的 LLM 设置只是当前浏览器的临时覆盖，不代替生产配置。
+
+## 发布后验证
+
+### 服务和端口
+
+```bash
+ssh aliyun-home-tunnel '
+  systemctl is-active action-learning nginx
+  curl -fsS http://127.0.0.1:18000/api/v1/health
+  nginx -t
+  ss -lntp
+'
+```
+
+### 外部入口
+
+```bash
+curl --noproxy "*" -fsS http://8.152.171.142/api/v1/health
+curl --noproxy "*" -I http://8.152.171.142/
+```
+
+### 业务冒烟
+
+- 身份选择页能显示三个角色；
+- 销售工作台能新建需求并看到审核状态；
+- 研发工作台能看到能力池和技术确认入口；
+- 管理员工作台能看到审核队列、指派入口和终审；
+- 知识检索能返回引用或明确的空知识库提示；
+- 页面刷新后路由和浏览器身份正常。
+
+## 回滚原则
+
+若健康检查、前端入口或业务冒烟失败：
+
+1. 停止继续变更；
+2. 根据部署前备份恢复应用代码和前端 `dist/`；
+3. 仅在数据库确实发生不兼容变更时恢复数据库；
+4. 恢复本项目 systemd/Nginx 配置；
+5. 执行 `nginx -t` 后 reload；
+6. 重新验证服务、端口和共享站点。
+
+不要通过修改网络、代理或跳板机配置来规避应用部署问题。
 
 ---
-*Created: 2026-04-24 — Phase 1 计划阶段*
+
+最后核对：2026-07-28

@@ -1,82 +1,188 @@
 # AI 工坊平台
 
-> 行动学习课题产物 — 打通前端（销售/咨询）与后端（研发/产品）的信息透明化平台。
+> 面向销售/咨询、研发和管理者的客户需求—技术能力协同与审核平台。
 
-## 项目简介
+## 当前状态
 
-本平台旨在解决公司内部前后端信息不对称问题：
+平台已从最初的“信息展示 MVP”发展为可运行的业务闭环，并已部署到阿里云环境：
 
-- **后端预研项目可见化**：研发预研的项目对前端团队可见，方便匹配客户需求
-- **前端需求反馈通道**：销售/咨询可提交客户需求，研发可直接获取一手信息
-- **智能匹配**：对需求与能力池进行候选分析，展示评分、理由和能力缺口，由人工确认后建立正式关联
-- **信息汇总与透明化**：统一平台展示项目状态、需求进展、匹配关系
+- 生产入口：<http://8.152.171.142/>
+- API 文档：<http://8.152.171.142/docs>
+- 当前里程碑：v2.1 试运行闭环完成（当前代码）
+- 生产版本：已部署的 v2.0，v2.1 尚未提交和部署
+- 最近验证：后端 62 项测试、前端 9 项测试、ESLint 与生产构建通过
 
-团队角色覆盖：销售、咨询、研发、技术支持、解决方案工程师
+当前身份由使用者在浏览器中选择并保存在本地，用于呈现不同工作台和操作能力；它不是企业级登录或安全权限边界。
 
-## 技术栈
+## 解决什么问题
+
+传统客户需求协同依赖聊天、邮件和熟人询问，常见问题包括：
+
+- 销售不了解已有技术能力，重复询问或重复建设；
+- 研发获取客户需求较晚，缺少统一、结构化的一手信息；
+- “需求是否真实、能力是否覆盖、谁确认过”缺少责任人和记录；
+- 管理者难以识别未覆盖需求、重复投入和重点行业机会；
+- 方案、判断依据和历史沟通散落，无法沉淀为组织知识。
+
+AI 工坊将需求、能力、关联、审核、评论和知识文档放入同一条可追溯流程。
+
+## 已完成的业务闭环
+
+```text
+销售/咨询提交客户需求
+        ↓
+管理员指派审核责任人
+        ↓
+需求审核通过并进入能力匹配
+        ↓
+AI 推荐或管理员建立需求—能力关联
+        ↓
+研发进行技术确认
+        ↓
+管理员终审关联
+        ↓
+形成已确认匹配、审核记录和协作知识
+```
+
+### 1. 角色化工作台
+
+| 角色 | 默认工作区 | 主要职责 |
+|------|------------|----------|
+| 销售 / 咨询 | 需求池 | 提交和维护客户需求，查看审核及匹配进展 |
+| 研发 | 能力池 | 维护技术能力，评估待处理需求，完成技术确认 |
+| 管理员 | 管理审核 | 指派审核人、审核需求、编排关联、终审匹配、管理知识库 |
+
+管理员不承担“代替业务新建需求”或“代替研发新建能力”，重点负责治理、责任分配和跨团队关联。
+
+### 2. 需求与能力管理
+
+- 客户需求包含客户、联系人、紧急度、标签、描述和提交人；
+- 技术能力包含负责人、状态、标签和能力描述；
+- 新需求必须有提交人和有效描述，避免空白或占位信息进入审核；
+- 历史数据缺失时明确显示“历史记录未保存”，不伪造提交人或审核信息；
+- 行业/业务线标签支持统一分类和筛选；
+- 详情页汇总业务信息、审核责任、关联、评论及历史记录。
+
+### 3. 管理审核机制
+
+- 管理员可为需求指派审核责任人；
+- 被指派人才能执行对应需求审核；
+- 提交人不能审核自己的需求；
+- 审核记录保存操作人、意见、前后状态和时间；
+- 需求状态通过专用审核接口转换，通用编辑接口不能绕过流程；
+- 需求状态覆盖草稿、待审核、已受理、匹配中、已匹配和搁置，并兼容历史状态。
+
+### 4. 需求—能力关联治理
+
+- 支持人工建立关联，也支持 AI 生成候选关联；
+- 关联保留覆盖状态、AI 评分、推荐理由、能力缺口和来源；
+- 研发先做技术确认，管理员再做最终审核；
+- 创建关联的人不能审核自己创建的关联；
+- 技术确认人与最终审核人必须分离；
+- 驳回必须填写原因，所有动作留痕；
+- 只有通过终审的关联才形成正式匹配并更新需求状态。
+
+### 5. AI 辅助输入与匹配
+
+- 使用自然语言结构化生成需求或能力草稿；
+- 支持 PNG、JPG/JPEG、WEBP 图片识别并转为可编辑草稿；
+- AI 对需求和能力进行候选分析，提供评分、覆盖程度、理由和缺口；
+- AI 结果只作为建议，必须经过人工审核后才能成为正式关联；
+- 默认接入 Qwen OpenAI-compatible API，可由服务器配置，浏览器可临时覆盖演示配置。
+
+### 6. 知识库与智能助手
+
+- 支持导入 TXT、Markdown、CSV 文档；
+- 支持知识检索、来源过滤、引用片段和问答；
+- 项目与需求数据会同步进入检索知识；
+- 全局助手基于 RAG + Qwen 回答，并展示引用依据；
+- 销售可把对话内容转换成需求草稿并带入新建需求表单；
+- 管理员可查看、删除和重建知识库文档。
+
+### 7. 管理看板与协作
+
+- 汇总能力、需求、关联和需求覆盖率；
+- 展示完全覆盖、部分覆盖、未覆盖的分布；
+- 按行业/业务线筛选，帮助识别供需缺口；
+- 项目和需求详情支持评论，保留跨团队沟通记录；
+- 角色工作台只突出当前角色需要处理的入口，降低操作干扰。
+
+### 8. v2.1 个人待办与试运行指标
+
+- 按当前身份聚合个人待办，并显示剩余时间、即将到期和逾期；
+- 管理员可查看审核人覆盖率、候选能力覆盖率和处理周期；
+- 对需求和能力进行数据质量评分，列出需要补充的信息；
+- 使用关联的人工审核结果评测 AI 候选采纳率；
+- 汇总 AI 平均分、真实样例和高频能力缺口；
+- v2.1 为本项目最终功能范围，不继续建设 SSO、企业集成或数据库迁移版本。
+
+## 业务价值
+
+| 业务目标 | 平台带来的价值 |
+|----------|----------------|
+| 打破信息孤岛 | 销售看到能力供给，研发看到真实需求，管理者看到全局供需 |
+| 提高响应速度 | AI 检索和候选匹配减少反复询问，快速定位可复用能力 |
+| 提升输入质量 | 结构化字段、描述校验和 AI 辅助输入减少低质量需求 |
+| 建立治理责任 | 指派审核人、职责分离和状态机让“谁负责、谁确认”清晰可查 |
+| 降低错误决策 | AI 只推荐、人工分级审核，避免未经验证的匹配直接落地 |
+| 沉淀组织知识 | 需求、能力、评论、审核依据和文档统一留存并可检索 |
+| 支持资源决策 | 覆盖率和缺口分布帮助判断能力建设、预研和客户优先级 |
+| 降低试点成本 | SQLite + systemd + Nginx 的轻量架构适合小规模快速验证 |
+
+## 当前边界
+
+- 浏览器身份选择不是 SSO、认证或后端 RBAC；
+- v2.1 提供站内 SLA 与逾期提示，但不建设邮件、Teams 或实时推送；
+- 暂未对接 CRM、Jira、企业通讯录等内部系统；
+- SQLite 继续作为最终试点存储，不规划 PostgreSQL/Alembic 迁移；
+- AI 和知识问答依赖生产环境的 Qwen/RAG 配置，结果仍需人工判断；
+- 暂无移动端 App 和批量业务数据导入/导出。
+
+## 技术架构
 
 | 层级 | 技术选型 |
-|------|---------|
-| 后端 | FastAPI + SQLModel + SQLite (MVP) |
+|------|----------|
+| 后端 | FastAPI + SQLModel + SQLite |
 | 前端 | React 19 + Vite + TypeScript + Ant Design 6 |
 | 状态管理 | Zustand |
-| 环境管理 | uv (Python) / npm (Node.js) |
-| 部署 | Nginx + systemd（MVP） |
+| AI | Qwen OpenAI-compatible API |
+| 检索增强 | Qdrant Client + FastEmbed；测试支持内存后端 |
+| 环境管理 | uv / npm |
+| 生产运行 | Nginx + systemd |
 
 ## 项目结构
 
-```
+```text
 action_learning/
-├── backend/              # Python 后端服务
+├── backend/
 │   ├── app/
-│   │   ├── api/          # API 路由 (projects, requirements, matches, tags, comments, stats)
+│   │   ├── api/          # 业务、审核、AI、RAG、Chat API
+│   │   ├── rag/          # 检索、向量存储与数据同步
 │   │   ├── models.py     # SQLModel 数据模型
-│   │   ├── schemas.py    # Pydantic 请求/响应 Schema
-│   │   ├── database.py   # 数据库配置
-│   │   └── main.py       # FastAPI 应用入口
-│   ├── tests/            # 测试
-│   └── pyproject.toml    # Python 依赖配置
-├── frontend/             # React 前端应用
-│   ├── src/
-│   │   ├── pages/        # 页面组件 (Dashboard, Projects, Requirements, Matches, Tags)
-│   │   ├── components/   # 通用组件
-│   │   ├── services/     # API 服务层
-│   │   └── types/        # TypeScript 类型定义
-│   └── package.json      # Node.js 依赖配置
-├── deploy/               # 部署配置
-├── docs/                 # 设计文档与演示材料
-└── AGENTS.md             # AI Agent 配置
+│   │   └── main.py       # FastAPI 入口
+│   └── tests/
+├── frontend/
+│   └── src/
+│       ├── auth/         # 身份、角色能力矩阵
+│       ├── components/   # 全局助手等组件
+│       ├── pages/        # 角色入口、工作台、审核、知识检索
+│       ├── services/     # API 与 LLM 配置
+│       └── stores/       # 前端状态
+├── deploy/               # systemd / Nginx 基础模板
+├── scripts/              # 本地启动与 Ubuntu 部署脚本
+├── docs/                 # 部署和设计记录
+└── .planning/            # 需求、路线图与里程碑状态
 ```
 
-## 快速开始
+## 本地开发
 
-### 前置条件
+前置条件：Python 3.10+、Node.js 18+、[uv](https://docs.astral.sh/uv/)。
 
-- Python >= 3.10
-- Node.js >= 18
-- [uv](https://docs.astral.sh/uv/) (Python 包管理)
-
-### 后端启动
+一键启动：
 
 ```bash
-cd backend
-uv sync                    # 安装依赖
-uv run uvicorn app.main:app --reload --port 8000
+./scripts/dev.sh
 ```
-
-API 文档：http://localhost:8000/docs
-
-### 前端启动
-
-```bash
-cd frontend
-npm install                # 安装依赖
-npm run dev                # 启动开发服务器
-```
-
-访问：http://localhost:5173
-
-### 一键启动
 
 Windows PowerShell：
 
@@ -84,85 +190,60 @@ Windows PowerShell：
 .\scripts\dev.ps1
 ```
 
-macOS / Linux：
+默认访问：
 
-```bash
-./scripts/dev.sh
-```
+- 前端：<http://127.0.0.1:5173>
+- 后端文档：<http://127.0.0.1:8000/docs>
 
-默认端口：
-
-- 前端：http://127.0.0.1:5173
-- 后端：http://127.0.0.1:8000/docs
-
-如果端口被占用：
-
-```powershell
-.\scripts\dev.ps1 -BackendPort 8001 -FrontendPort 5174
-```
-
-```bash
-./scripts/dev.sh --backend-port 8001 --frontend-port 5174
-```
-
-### Ubuntu 服务器部署
-
-推荐使用 Nginx 对外提供单入口，systemd 托管后端服务：
-
-```bash
-sudo env APP_DIR=/opt/action_learning SERVICE_USER=wenbo bash scripts/deploy-ubuntu.sh
-```
-
-### LLM 配置
-
-AI 结构化输入默认使用 Qwen OpenAI-compatible API。生产部署推荐在后端服务环境中配置：
-
-- `QWEN_API_KEY`：系统默认 API key
-- `QWEN_MODEL`：模型名，默认 `qwen3.6-plus`
-- `QWEN_BASE_URL`：可选，默认 DashScope OpenAI-compatible endpoint
-
-API key 不会写入数据库。页面右上角“设置”可为当前浏览器临时覆盖配置，方便演示或 key 失效时快速切换。
-
-Ubuntu systemd 部署时，可在 `/etc/action-learning.env` 中配置上述变量，然后重启服务：
-
-```bash
-sudo systemctl restart action-learning
-```
-
-部署模板：
-
-- `deploy/action-learning.service`
-- `deploy/nginx.conf`
-
-详细说明见 `docs/deployment-notes.md`。
-
-## 核心功能模块
-
-| 模块 | 说明 |
-|------|------|
-| 项目管理 | 预研项目的创建、编辑、状态跟踪 |
-| 需求管理 | 客户需求录入、分类、优先级管理 |
-| 智能匹配 | 需求与项目的自动/手动匹配 |
-| 标签系统 | 统一的标签分类体系 |
-| 评论协作 | 项目与需求的评论交流 |
-| 数据统计 | Dashboard 数据汇总展示 |
-
-## 开发指南
-
-### 运行测试
+也可以分别启动：
 
 ```bash
 cd backend
-uv run pytest              # 单元测试
-uv run python test_e2e.py  # 端到端测试
+uv sync
+uv run uvicorn app.main:app --reload --port 8000
 ```
 
-### 代码风格
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-- Python: PEP 8 + 类型标注
-- TypeScript: ESLint + 严格模式
-- 注释语言：中文优先
+## 配置与验证
+
+生产环境通过 `/etc/action-learning.env` 提供 AI/RAG 配置，至少包括：
+
+- `QWEN_API_KEY`
+- `QWEN_MODEL`，默认 `qwen3.6-plus`
+- `QWEN_BASE_URL`，可选
+- Qdrant/RAG 相关配置按环境启用
+
+运行验证：
+
+```bash
+cd backend
+uv run pytest
+```
+
+```bash
+cd frontend
+npm test
+npm run lint
+npm run build
+```
+
+部署环境、备份边界和验证步骤见 [docs/deployment-notes.md](docs/deployment-notes.md)。
+
+## 相关文档
+
+- [产品与业务设计](AI工坊平台设计.md)
+- [产品范围](.planning/PROJECT.md)
+- [需求清单](.planning/REQUIREMENTS.md)
+- [路线图](.planning/ROADMAP.md)
+- [当前状态](.planning/STATE.md)
+- [后端说明](backend/README.md)
+- [前端说明](frontend/README.md)
 
 ## License
 
-Internal use only - Schneider Electric
+Internal use only — Schneider Electric

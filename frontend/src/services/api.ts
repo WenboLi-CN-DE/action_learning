@@ -10,6 +10,8 @@ import type {
   LLMStructureResult,
   MatchItem,
   MatchPayload,
+  PilotMetrics,
+  PilotTaskResponse,
   ProjectItem,
   ProjectPayload,
   RAGDocumentItem,
@@ -96,6 +98,13 @@ export const createTag = (payload: TagPayload) =>
   })
 
 export const fetchMatches = () => fetchJSON<MatchItem[]>('/matches')
+
+export const fetchPilotTasks = (role: PilotTaskResponse['role'], actor: string) => {
+  const params = new URLSearchParams({ role, actor })
+  return fetchJSON<PilotTaskResponse>(`/pilot/tasks?${params.toString()}`)
+}
+
+export const fetchPilotMetrics = () => fetchJSON<PilotMetrics>('/pilot/metrics')
 
 export const createMatch = (payload: MatchPayload) =>
   fetchJSON<MatchItem>('/matches', {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Button,
@@ -32,6 +32,8 @@ import {
   fetchComments,
   fetchLLMStatus,
   fetchMatches,
+  fetchPilotMetrics,
+  fetchPilotTasks,
   fetchProjects,
   fetchRequirements,
   fetchReviewEvents,
@@ -54,6 +56,10 @@ import type {
   LLMStructureResult,
   MatchItem,
   MatchPayload,
+  DataQualityRecord,
+  PilotMetrics,
+  PilotTaskItem,
+  PilotTaskResponse,
   ProjectItem,
   ProjectPayload,
   RequirementItem,
@@ -72,6 +78,10 @@ import {
   normalizeUrgency,
 } from './aiStructureMapping'
 import { buildDashboardStats, filterDashboardDataByTag } from './dashboardStats'
+import {
+  ManagementPilotDashboard,
+  PersonalTaskCenter,
+} from './PilotOverview'
 import ReviewQueue from './ReviewQueue'
 import {
   getRequirementDataIssues,
@@ -184,6 +194,8 @@ export default function WorkbenchPage() {
   const [requirements, setRequirements] = useState<RequirementItem[]>([])
   const [tags, setTags] = useState<TagItem[]>([])
   const [matches, setMatches] = useState<MatchItem[]>([])
+  const [pilotTasks, setPilotTasks] = useState<PilotTaskResponse | null>(null)
+  const [pilotMetrics, setPilotMetrics] = useState<PilotMetrics | null>(null)
   const [comments, setComments] = useState<CommentItem[]>([])
   const [reviewEvents, setReviewEvents] = useState<ReviewEventItem[]>([])
   const [detailTarget, setDetailTarget] = useState<DetailTarget | null>(null)
@@ -309,26 +321,30 @@ export default function WorkbenchPage() {
     return matches.filter((match) => match.requirement_id === detailTarget.item.id)
   }, [detailTarget, matches])
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const [projectData, requirementData, tagData, matchData] = await Promise.all([
+      const [projectData, requirementData, tagData, matchData, taskData, metricsData] = await Promise.all([
         fetchProjects(),
         fetchRequirements(),
         fetchTags(),
         fetchMatches(),
+        fetchPilotTasks(role, displayName),
+        role === 'admin' ? fetchPilotMetrics() : Promise.resolve(null),
       ])
       setProjects(projectData)
       setRequirements(requirementData)
       setTags(tagData)
       setMatches(matchData)
+      setPilotTasks(taskData)
+      setPilotMetrics(metricsData)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : '数据加载失败')
     } finally {
       setLoading(false)
     }
-  }
+  }, [displayName, role])
 
   useEffect(() => {
     let active = true
@@ -340,7 +356,7 @@ export default function WorkbenchPage() {
     return () => {
       active = false
     }
-  }, [])
+  }, [loadData])
 
   useEffect(() => {
     fetchLLMStatus()
@@ -510,6 +526,27 @@ export default function WorkbenchPage() {
             .catch(() => setReviewEvents([]))
         : Promise.resolve(),
     ])
+  }
+
+  function openPilotTask(task: PilotTaskItem) {
+    if (task.target_type === 'match') {
+      setActiveTab('reviews')
+      return
+    }
+    const requirement = requirements.find((item) => item.id === task.target_id)
+    if (!requirement) return
+    setActiveTab(role === 'sales' ? 'requirements' : 'reviews')
+    void openDetail({ type: 'requirement', item: requirement })
+  }
+
+  function openQualityRecord(record: DataQualityRecord) {
+    if (record.target_type === 'requirement') {
+      const requirement = requirements.find((item) => item.id === record.target_id)
+      if (requirement) void openDetail({ type: 'requirement', item: requirement })
+      return
+    }
+    const project = projects.find((item) => item.id === record.target_id)
+    if (project) void openDetail({ type: 'project', item: project })
   }
 
   async function assignReviewer() {
@@ -849,6 +886,12 @@ export default function WorkbenchPage() {
           </div>
         )}
 
+        <PersonalTaskCenter
+          data={pilotTasks}
+          loading={loading}
+          onOpenTask={openPilotTask}
+        />
+
         <Tabs
           className="workbench-tabs"
           activeKey={activeTab}
@@ -859,6 +902,11 @@ export default function WorkbenchPage() {
               label: '总览',
               children: (
                 <div className="dashboard-panel">
+                  <ManagementPilotDashboard
+                    metrics={pilotMetrics}
+                    loading={loading}
+                    onOpenQualityRecord={openQualityRecord}
+                  />
                   <div className="dashboard-toolbar">
                     <div>
                       <Title level={4}>匹配透明度总览</Title>

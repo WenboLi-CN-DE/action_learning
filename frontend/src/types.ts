@@ -228,3 +228,85 @@ export interface ChatResult {
   citations: RAGCitation[]
   model: string
 }
+
+export type PilotTaskType =
+  | 'complete_draft'
+  | 'assign_reviewer'
+  | 'review_requirement'
+  | 'orchestrate_match'
+  | 'technical_review'
+  | 'final_review'
+
+export interface PilotTaskItem {
+  task_type: PilotTaskType
+  target_type: 'requirement' | 'match'
+  target_id: number
+  title: string
+  subtitle: string
+  urgency: string
+  owner: string | null
+  started_at: string
+  due_at: string
+  sla_hours: number
+  remaining_hours: number
+  overdue: boolean
+  due_soon: boolean
+  action_label: string
+}
+
+export interface PilotTaskResponse {
+  role: 'sales' | 'research' | 'admin'
+  actor: string
+  total: number
+  overdue: number
+  due_soon: number
+  items: PilotTaskItem[]
+}
+
+export interface DataQualityRecord {
+  target_type: 'requirement' | 'project'
+  target_id: number
+  title: string
+  owner: string | null
+  score: number
+  issues: string[]
+}
+
+export interface PilotAISample {
+  match_id: number
+  requirement_title: string
+  project_name: string
+  score: number | null
+  coverage_status: string
+  outcome: string
+  reason: string | null
+  gaps: string[]
+  created_at: string
+}
+
+export interface PilotMetrics {
+  generated_at: string
+  data_quality: {
+    average_score: number
+    low_quality_count: number
+    records: DataQualityRecord[]
+  }
+  workflow: {
+    reviewer_assignment_rate: number
+    candidate_coverage_rate: number
+    average_requirement_review_hours: number
+    average_match_cycle_hours: number
+    pending_requirement_count: number
+    eligible_requirement_count: number
+  }
+  ai_evaluation: {
+    total_candidates: number
+    reviewed_candidates: number
+    approved_candidates: number
+    rejected_candidates: number
+    adoption_rate: number
+    average_score: number
+    samples: PilotAISample[]
+  }
+  gap_distribution: { gap: string; count: number }[]
+}

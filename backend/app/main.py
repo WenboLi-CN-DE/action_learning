@@ -6,6 +6,7 @@ from app.api.chat import router as chat_router
 from app.api.health import router as health_router
 from app.api.llm import router as llm_router
 from app.api.matches import router as matches_router
+from app.api.pilot import router as pilot_router
 from app.api.projects import router as projects_router
 from app.api.rag import router as rag_router
 from app.api.requirements import router as requirements_router
@@ -31,6 +32,7 @@ api_router.include_router(projects_router)
 api_router.include_router(requirements_router)
 api_router.include_router(tags_router)
 api_router.include_router(matches_router)
+api_router.include_router(pilot_router)
 api_router.include_router(comments_router)
 api_router.include_router(llm_router)
 api_router.include_router(rag_router)

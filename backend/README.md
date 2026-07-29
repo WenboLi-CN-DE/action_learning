@@ -1,81 +1,106 @@
-## Backend
+# AI 工坊后端
 
-FastAPI + SQLModel backend for the AI workshop platform.
+FastAPI + SQLModel 后端，负责需求、能力、关联、审核、评论、AI、RAG 和 Chatbot。
 
-## Run
+## 本地运行
 
 ```bash
 uv sync
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-## Test
+API 文档：<http://127.0.0.1:8000/docs>
+
+## 验证
 
 ```bash
 uv run pytest
 ```
 
-## RAG 知识检索
+当前基线：62 项后端测试通过。
 
-### API
+## 业务模块
 
-- `POST /api/v1/rag/ingest` — 文档入库（切片 + 向量化）
-- `POST /api/v1/rag/import-file` — 上传 `.txt` / `.md` / `.csv` 资料并入库
-- `POST /api/v1/rag/retrieve` — 检索 top-k 相关文本块（支持 metadata 过滤）
-- `POST /api/v1/rag/query` — 检索增强问答（返回答案 + 引用 + 原始 chunk）
-- `POST /api/v1/llm/recognize-image` — 上传图片并提取可用于需求/能力录入的文本
+| Router / 模块 | 责任 |
+|---------------|------|
+| `projects` | 能力创建、查询、更新及知识同步 |
+| `requirements` | 需求创建、查询、更新、数据质量校验及知识同步 |
+| `reviews` | 审核人指派、需求状态转换和审核事件 |
+| `matches` | 人工/AI 关联、技术确认、最终审核和关联历史 |
+| `tags` | 行业/业务线标签 |
+| `comments` | 需求与能力的协作评论 |
+| `llm` | LLM 状态、自然语言结构化和图片识别 |
+| `rag` | 文档入库、文件导入、检索、问答、列表、删除和重建 |
+| `chat` | 基于 RAG + Qwen 的多轮助手 |
+| `pilot` | v2.1 个人待办、SLA、数据质量、AI 评测和管理指标 |
 
-### 配置（环境变量）
+v2.1 试运行 API：
+
+- `GET /api/v1/pilot/tasks?role=<role>&actor=<name>`
+- `GET /api/v1/pilot/metrics`
+
+所有业务 API 使用 `/api/v1` 前缀，完整参数以 OpenAPI 文档为准。
+
+## 审核规则
+
+### 需求
+
+- 新需求必须包含提交人和有效描述；
+- 审核责任人由管理员指派；
+- 只有被指派人能执行对应审核；
+- 提交人不能审核自己的需求；
+- 普通更新不能直接改变审核状态；
+- 审核事件保存操作人、意见、前后状态和时间。
+
+### 需求—能力关联
+
+- 人工和 AI 关联都先进入 `technical_pending`；
+- 研发技术确认后进入 `final_pending`；
+- 管理员终审后才进入 `approved`；
+- 创建人不能审核自己的关联；
+- 技术确认人不能执行最终审核；
+- 驳回必须填写意见；
+- 终审通过后才更新需求的正式匹配状态。
+
+## LLM 配置
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `RAG_BACKEND` | `qdrant` | 后端类型：`qdrant`（向量检索）或 `memory`（内存，测试用） |
-| `RAG_EMBEDDING_MODEL` | `BAAI/bge-small-zh-v1.5` | fastembed 支持的 embedding 模型名 |
-| `RAG_QDRANT_URL` | _(空=内存模式)_ | Qdrant 服务地址，如 `http://localhost:6333` |
-| `RAG_QDRANT_API_KEY` | _(空)_ | Qdrant Cloud API Key（可选） |
-| `RAG_COLLECTION_NAME` | `ai_workshop_docs` | Qdrant collection 名称 |
-| `RAG_CHUNK_SIZE` | `380` | 文本分块大小（字符数） |
-| `RAG_CHUNK_OVERLAP` | `60` | 分块重叠字符数 |
+| `QWEN_API_KEY` | 无 | Qwen API key |
+| `QWEN_MODEL` | `qwen3.6-plus` | 默认模型 |
+| `QWEN_BASE_URL` | DashScope OpenAI-compatible endpoint | 兼容接口地址 |
 
-### 快速验证
+API key 不写入 SQLite。生产环境从 `/etc/action-learning.env` 读取。
 
-```bash
-# 使用内存 Qdrant（无需部署 Qdrant 服务，首次自动下载 ~50MB 模型）
-uv run uvicorn app.main:app --reload
+## RAG 配置
 
-# 入库一条文档
-curl -X POST http://localhost:8000/api/v1/rag/ingest \
-  -H "Content-Type: application/json" \
-  -d '{"title":"楼宇节能方案","content":"该方案支持楼宇能耗监测、告警和优化建议。","source_type":"project","tags":["楼宇","节能"]}'
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `RAG_BACKEND` | `qdrant` | `qdrant` 或测试用 `memory` |
+| `RAG_EMBEDDING_MODEL` | `BAAI/bge-small-zh-v1.5` | FastEmbed 模型 |
+| `RAG_QDRANT_URL` | 空 | Qdrant 地址；为空时使用客户端内存模式 |
+| `RAG_QDRANT_API_KEY` | 空 | Qdrant API key |
+| `RAG_COLLECTION_NAME` | `ai_workshop_docs` | Collection 名 |
+| `RAG_CHUNK_SIZE` | `380` | 分块字符数 |
+| `RAG_CHUNK_OVERLAP` | `60` | 重叠字符数 |
 
-# 导入一份资料
-curl -X POST http://localhost:8000/api/v1/rag/import-file \
-  -F "file=@docs/building-energy.md" \
-  -F "source_type=manual" \
-  -F "tags=楼宇,节能" \
-  -F "owner_role=市场资料"
+支持的文件导入类型：`.txt`、`.md`、`.csv`。图片识别支持 PNG、JPG/JPEG、WEBP。
 
-# 检索
-curl -X POST http://localhost:8000/api/v1/rag/retrieve \
-  -H "Content-Type: application/json" \
-  -d '{"query":"楼宇能耗优化","top_k":3}'
+## RAG 目录
 
-# 问答
-curl -X POST http://localhost:8000/api/v1/rag/query \
-  -H "Content-Type: application/json" \
-  -d '{"question":"有没有楼宇相关的能力？","top_k":5}'
-```
-
-### 架构说明
-
-```
+```text
 app/rag/
-├── __init__.py
-├── config.py          # 配置（环境变量）
-├── vector_store.py    # Qdrant 向量存储封装
-└── service.py         # 业务编排（双后端：memory / qdrant）
+├── config.py          # 环境配置
+├── vector_store.py    # Qdrant / memory 存储封装
+├── service.py         # 入库、检索和文档生命周期
+└── sync.py            # 需求与能力数据同步
 ```
 
-- **开发/测试**：默认使用 Qdrant 内存模式（`RAG_QDRANT_URL` 为空时），无需部署外部服务
-- **生产**：设置 `RAG_QDRANT_URL=http://your-qdrant:6333` 连接远程 Qdrant
-- **Embedding 模型**：默认 `BAAI/bge-small-zh-v1.5`（中文效果好、体积小）；可切换为 `BAAI/bge-m3`（多语言更强）
+## 数据库边界
+
+当前使用 SQLite 作为最终试点存储，并包含对历史表字段的兼容处理。根据 v2.1 最终范围决策，不规划 PostgreSQL/Alembic 迁移。后续仅维护：
+
+1. 现有 SQLite 数据备份和恢复；
+2. 当前表结构的兼容处理；
+3. 已有接口的缺陷修复；
+4. 不新增企业身份、复杂数据库或系统集成能力。
