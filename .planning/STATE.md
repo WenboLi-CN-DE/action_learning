@@ -22,7 +22,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-28)
 
 **Core value:** 让真实客户需求与可复用技术能力双向透明，并通过明确责任、分级审核和证据留痕，把“看得见”升级为“可信地关联和决策”。
-**Current focus:** v2.1 最终功能范围完成，等待明确提交/部署或真实试运行
+**Current focus:** v2.1 已完成并部署，进入真实业务试运行与缺陷修复阶段
 
 ## Current Position
 
@@ -82,7 +82,7 @@ Recent decisions:
 ### Pending Todos
 
 - 使用 10–20 组真实需求和能力运行现有流程
-- 在用户明确要求后提交并部署 v2.1
+- 使用真实业务样本开展 v2.1 试运行并记录指标
 - 修复试运行发现的缺陷
 
 ### Blockers/Concerns
