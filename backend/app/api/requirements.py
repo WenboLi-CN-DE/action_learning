@@ -23,6 +23,7 @@ from app.schemas import (
 
 router = APIRouter(prefix="/requirements", tags=["requirements"])
 PLACEHOLDER_DESCRIPTIONS = {"具体可以联系", "具体可联系", "后续联系", "待补充"}
+MAX_LLM_MATCH_CANDIDATES = 10
 
 
 def validate_requirement_identity_and_description(
@@ -237,7 +238,7 @@ def analyze_requirement_matches(
         payload.api_key, payload.model, payload.base_url
     )
 
-    candidates = rank_project_candidates(requirement, projects)
+    candidates = rank_project_candidates(requirement, projects)[:MAX_LLM_MATCH_CANDIDATES]
     try:
         analysis = llm_service.call_qwen_for_matching(
             requirement_context=requirement_context(requirement),
@@ -246,6 +247,11 @@ def analyze_requirement_matches(
             model=model,
             base_url=base_url,
         )
+    except httpx.TimeoutException as exc:
+        raise HTTPException(
+            status_code=504,
+            detail="AI 匹配超时：模型分析时间过长，请重试",
+        ) from exc
     except httpx.HTTPStatusError as exc:
         raise HTTPException(status_code=502, detail=f"AI 匹配失败：上游服务返回 {exc.response.status_code}") from exc
     except httpx.RequestError as exc:

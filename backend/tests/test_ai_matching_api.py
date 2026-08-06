@@ -1,8 +1,10 @@
+import httpx
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel, Session, create_engine
 
+from app import llm_service
 from app.api.requirements import router as requirements_router
 from app.database import get_session
 from app.main import app
@@ -10,6 +12,38 @@ from app.models import Requirement
 
 
 client = TestClient(app)
+
+
+def test_qwen_matching_disables_thinking(monkeypatch):
+    captured_payload = None
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [
+                    {"message": {"content": '{"recommendations": []}'}}
+                ]
+            }
+
+    def fake_post(*_args, json, **_kwargs):
+        nonlocal captured_payload
+        captured_payload = json
+        return FakeResponse()
+
+    monkeypatch.setattr("app.llm_service.httpx.post", fake_post)
+    result = llm_service.call_qwen_for_matching(
+        requirement_context="测试需求",
+        candidates=[],
+        api_key="system-key",
+        model="qwen3.6-plus",
+        base_url="https://model.example/v1",
+    )
+
+    assert result == {"recommendations": []}
+    assert captured_payload["enable_thinking"] is False
 
 
 def _create_project(name: str, description: str, tag_ids: list[int]):
@@ -108,6 +142,73 @@ def test_ai_matching_requires_an_existing_requirement(monkeypatch):
     monkeypatch.setenv("QWEN_API_KEY", "system-key")
     response = client.post("/api/v1/requirements/999999/ai-matches", json={})
     assert response.status_code == 404
+
+
+def test_ai_matching_limits_candidates_sent_to_model(monkeypatch):
+    monkeypatch.setenv("QWEN_API_KEY", "system-key")
+    for index in range(12):
+        _create_project(
+            f"批量候选能力 {index}",
+            f"用于验证候选预筛上限的能力描述 {index}。",
+            [],
+        )
+    requirement = client.post(
+        "/api/v1/requirements",
+        json={
+            "title": "验证模型候选上限",
+            "description": "只应把本地排序靠前的有限候选发送给模型分析。",
+            "customer": "测试客户",
+            "urgency": "medium",
+            "status": "new",
+            "submitted_by": "测试销售",
+            "tag_ids": [],
+        },
+    ).json()
+    observed_candidate_count = 0
+
+    def fake_call(*, candidates, **_kwargs):
+        nonlocal observed_candidate_count
+        observed_candidate_count = len(candidates)
+        return {"recommendations": []}
+
+    monkeypatch.setattr("app.llm_service.call_qwen_for_matching", fake_call)
+    response = client.post(
+        f"/api/v1/requirements/{requirement['id']}/ai-matches",
+        json={"top_k": 5},
+    )
+
+    assert response.status_code == 200
+    assert observed_candidate_count == 10
+
+
+def test_ai_matching_reports_model_timeout(monkeypatch):
+    monkeypatch.setenv("QWEN_API_KEY", "system-key")
+    _create_project("超时测试能力", "用于验证模型响应超时的能力。", [])
+    requirement = client.post(
+        "/api/v1/requirements",
+        json={
+            "title": "验证模型超时提示",
+            "description": "模型超时时应返回准确且可操作的错误提示。",
+            "customer": "测试客户",
+            "urgency": "medium",
+            "status": "new",
+            "submitted_by": "测试销售",
+            "tag_ids": [],
+        },
+    ).json()
+
+    def fake_call(**_kwargs):
+        request = httpx.Request("POST", "https://model.example/chat/completions")
+        raise httpx.ReadTimeout("timed out", request=request)
+
+    monkeypatch.setattr("app.llm_service.call_qwen_for_matching", fake_call)
+    response = client.post(
+        f"/api/v1/requirements/{requirement['id']}/ai-matches",
+        json={"top_k": 5},
+    )
+
+    assert response.status_code == 504
+    assert response.json()["detail"] == "AI 匹配超时：模型分析时间过长，请重试"
 
 
 def test_ai_matching_returns_empty_result_without_requiring_key_when_pool_is_empty(

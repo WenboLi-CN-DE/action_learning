@@ -178,6 +178,7 @@ def call_qwen_for_matching(
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
             "response_format": {"type": "json_object"},
             "temperature": 0.1,
+            "enable_thinking": False,
         },
         timeout=45.0,
     )
