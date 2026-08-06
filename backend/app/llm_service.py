@@ -110,6 +110,8 @@ def call_qwen_for_structure(
             "messages": build_structure_prompt(raw_text, target_type),
             "response_format": {"type": "json_object"},
             "temperature": 0.2,
+            "enable_thinking": False,
+            "max_tokens": 800,
         },
         timeout=30.0,
     )

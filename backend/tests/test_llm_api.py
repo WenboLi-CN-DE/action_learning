@@ -1,6 +1,10 @@
+import asyncio
+
 from fastapi.testclient import TestClient
 import httpx
 
+from app import llm_service
+from app.api import llm as llm_api
 from app.main import app
 
 
@@ -176,6 +180,77 @@ def test_structure_returns_clear_error_for_invalid_model_json(monkeypatch):
     assert response.status_code == 502
     assert response.json()["detail"] == "LLM 调用失败：ValueError"
     assert "system-key" not in response.text
+
+
+def test_structure_returns_clear_gateway_timeout_when_qwen_times_out(monkeypatch):
+    monkeypatch.setenv("QWEN_API_KEY", "system-key")
+
+    def fake_call_qwen(*, raw_text, target_type, api_key, model, base_url):
+        request = httpx.Request("POST", f"{base_url}/chat/completions")
+        raise httpx.ReadTimeout("timed out", request=request)
+
+    monkeypatch.setattr("app.llm_service.call_qwen_for_structure", fake_call_qwen)
+
+    response = client.post(
+        "/api/v1/llm/structure-requirement",
+        json={"raw_text": "客户需要节能。"},
+    )
+
+    assert response.status_code == 504
+    assert response.json()["detail"] == "LLM 调用超时，请稍后重试"
+    assert "system-key" not in response.text
+
+
+def test_qwen_structure_disables_thinking_and_limits_output(monkeypatch):
+    captured_payload = None
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [
+                    {"message": {"content": '{"fields": {}, "missing_fields": [], "follow_up_questions": [], "warnings": []}'}}
+                ]
+            }
+
+    def fake_post(*_args, json, **_kwargs):
+        nonlocal captured_payload
+        captured_payload = json
+        return FakeResponse()
+
+    monkeypatch.setattr("app.llm_service.httpx.post", fake_post)
+
+    result = llm_service.call_qwen_for_structure(
+        raw_text="客户需要节能。",
+        target_type="requirement",
+        api_key="system-key",
+        model="qwen3.6-plus",
+        base_url="https://model.example/v1",
+    )
+
+    assert result["fields"] == {}
+    assert captured_payload["enable_thinking"] is False
+    assert captured_payload["max_tokens"] == 800
+
+
+def test_structure_returns_gateway_timeout_before_proxy_deadline(monkeypatch):
+    monkeypatch.setenv("QWEN_API_KEY", "system-key")
+
+    async def fake_to_thread(*_args, **_kwargs):
+        await asyncio.sleep(0.01)
+
+    monkeypatch.setattr(llm_api, "LLM_STRUCTURE_TOTAL_TIMEOUT_SECONDS", 0.001)
+    monkeypatch.setattr(llm_api.asyncio, "to_thread", fake_to_thread)
+
+    response = client.post(
+        "/api/v1/llm/structure-requirement",
+        json={"raw_text": "客户需要节能。"},
+    )
+
+    assert response.status_code == 504
+    assert response.json()["detail"] == "LLM 调用超时，请稍后重试"
 
 
 def test_structure_returns_sanitized_upstream_http_error(monkeypatch):

@@ -1,4 +1,7 @@
+import asyncio
+import logging
 import re
+import time
 
 import httpx
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -8,6 +11,8 @@ from app.schemas import LLMImageRecognitionResult, LLMStatusRead, LLMStructureRe
 
 router = APIRouter(prefix="/llm", tags=["llm"])
 SUPPORTED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp"}
+LLM_STRUCTURE_TOTAL_TIMEOUT_SECONDS = 45.0
+logger = logging.getLogger(__name__)
 
 
 def redact_api_keys(text: str) -> str:
@@ -31,24 +36,39 @@ def get_llm_status():
     return LLMStatusRead(configured=llm_service.has_system_api_key(), model=llm_service.get_default_model())
 
 
-def structure_text(payload: LLMStructureRequest, target_type: str) -> LLMStructureResult:
+async def structure_text(payload: LLMStructureRequest, target_type: str) -> LLMStructureResult:
     api_key, model, base_url = llm_service.resolve_qwen_config(payload.api_key, payload.model, payload.base_url)
+    started_at = time.monotonic()
     try:
-        result = llm_service.call_qwen_for_structure(
-            raw_text=payload.raw_text,
-            target_type=target_type,
-            api_key=api_key,
-            model=model,
-            base_url=base_url,
+        result = await asyncio.wait_for(
+            asyncio.to_thread(
+                llm_service.call_qwen_for_structure,
+                raw_text=payload.raw_text,
+                target_type=target_type,
+                api_key=api_key,
+                model=model,
+                base_url=base_url,
+            ),
+            timeout=LLM_STRUCTURE_TOTAL_TIMEOUT_SECONDS,
         )
+    except TimeoutError as exc:
+        logger.warning("LLM structure timed out: target_type=%s model=%s elapsed_ms=%d", target_type, model, (time.monotonic() - started_at) * 1000)
+        raise HTTPException(status_code=504, detail="LLM 调用超时，请稍后重试") from exc
     except HTTPException:
         raise
     except httpx.HTTPStatusError as exc:
+        logger.warning("LLM structure upstream HTTP error: target_type=%s model=%s status=%d elapsed_ms=%d", target_type, model, exc.response.status_code, (time.monotonic() - started_at) * 1000)
         raise HTTPException(status_code=502, detail=f"LLM 调用失败：{extract_upstream_error(exc)}") from exc
+    except httpx.TimeoutException as exc:
+        logger.warning("LLM structure upstream timeout: target_type=%s model=%s elapsed_ms=%d", target_type, model, (time.monotonic() - started_at) * 1000)
+        raise HTTPException(status_code=504, detail="LLM 调用超时，请稍后重试") from exc
     except httpx.RequestError as exc:
+        logger.warning("LLM structure upstream request error: target_type=%s model=%s error=%s elapsed_ms=%d", target_type, model, exc.__class__.__name__, (time.monotonic() - started_at) * 1000)
         raise HTTPException(status_code=502, detail=f"LLM 调用失败：无法连接 Qwen API（{exc.__class__.__name__}）") from exc
     except Exception as exc:
+        logger.exception("LLM structure failed: target_type=%s model=%s error=%s elapsed_ms=%d", target_type, model, exc.__class__.__name__, (time.monotonic() - started_at) * 1000)
         raise HTTPException(status_code=502, detail=f"LLM 调用失败：{exc.__class__.__name__}") from exc
+    logger.info("LLM structure succeeded: target_type=%s model=%s elapsed_ms=%d", target_type, model, (time.monotonic() - started_at) * 1000)
     return LLMStructureResult(**llm_service.normalize_structure_payload(result), model=model)
 
 
@@ -91,10 +111,10 @@ async def recognize_image(
 
 
 @router.post("/structure-requirement", response_model=LLMStructureResult)
-def structure_requirement(payload: LLMStructureRequest):
-    return structure_text(payload, "requirement")
+async def structure_requirement(payload: LLMStructureRequest):
+    return await structure_text(payload, "requirement")
 
 
 @router.post("/structure-project", response_model=LLMStructureResult)
-def structure_project(payload: LLMStructureRequest):
-    return structure_text(payload, "project")
+async def structure_project(payload: LLMStructureRequest):
+    return await structure_text(payload, "project")
