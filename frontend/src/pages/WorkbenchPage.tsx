@@ -1082,7 +1082,7 @@ export default function WorkbenchPage() {
             },
             {
               key: 'projects',
-              label: '能力表',
+              label: role === 'sales' ? '匹配到的能力' : '能力表',
               children: (
                 <div className={`workbench-grid creation-workbench${capabilities.canManageProjects ? '' : ' read-only'}`}>
                   {capabilities.canManageProjects && <section className="form-panel creation-form-panel">
