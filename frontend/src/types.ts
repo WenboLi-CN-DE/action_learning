@@ -150,6 +150,7 @@ export interface LLMStructureResult {
   missing_fields: string[]
   follow_up_questions: string[]
   warnings: string[]
+  fallback_used: boolean
   model: string
 }
 

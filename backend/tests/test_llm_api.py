@@ -201,6 +201,7 @@ def test_structure_returns_editable_fallback_when_qwen_times_out(monkeypatch):
     payload = response.json()
     assert payload["fields"]["description"] == "客户需要节能。"
     assert "customer" in payload["missing_fields"]
+    assert payload["fallback_used"] is True
     assert payload["warnings"] == ["AI 服务响应超时，已保留原始描述，请人工补充后再应用。"]
     assert "system-key" not in response.text
 

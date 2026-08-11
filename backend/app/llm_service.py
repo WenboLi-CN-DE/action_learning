@@ -88,6 +88,7 @@ def build_structure_fallback(raw_text: str, target_type: str) -> dict[str, Any]:
         "missing_fields": missing_fields,
         "follow_up_questions": follow_up_questions,
         "warnings": ["AI 服务响应超时，已保留原始描述，请人工补充后再应用。"],
+        "fallback_used": True,
     }
 
 

@@ -23,6 +23,7 @@ const projectResult: LLMStructureResult = {
   missing_fields: [],
   follow_up_questions: [],
   warnings: [],
+  fallback_used: false,
 }
 
 const requirementResult: LLMStructureResult = {
@@ -40,6 +41,7 @@ const requirementResult: LLMStructureResult = {
   missing_fields: [],
   follow_up_questions: [],
   warnings: [],
+  fallback_used: false,
 }
 
 if (normalizeUrgency('中') !== 'medium') throw new Error('urgency mapping failed')

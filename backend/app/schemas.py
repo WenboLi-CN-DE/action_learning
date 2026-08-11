@@ -195,6 +195,7 @@ class LLMStructureResult(SQLModel):
     missing_fields: list[str] = []
     follow_up_questions: list[str] = []
     warnings: list[str] = []
+    fallback_used: bool = False
     model: str
 
 
