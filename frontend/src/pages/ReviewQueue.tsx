@@ -117,11 +117,11 @@ export default function ReviewQueue({
       {contextHolder}
       <div className="review-flow-summary">
         <div>
-          <Title level={3}>{isAdmin ? '管理审核中心' : '研发技术评估'}</Title>
+          <Title level={3}>{isAdmin ? '管理审核中心' : '匹配到的需求'}</Title>
           <Text type="secondary">
             {isAdmin
               ? '审核销售需求、编排能力关联，并对研发确认后的关联执行最终批准。'
-              : '维护能力表，查看 AI 推荐能力，并对管理员发起的需求—能力关联进行技术可行性确认。'}
+              : '查看已受理需求的 AI 匹配，并对管理员发起的需求—能力关联进行技术可行性确认。'}
           </Text>
         </div>
         <Space wrap>

@@ -559,12 +559,12 @@ export default function WorkbenchPage() {
 
   function openPilotTask(task: PilotTaskItem) {
     if (task.target_type === 'match') {
-      setActiveTab('reviews')
+      setActiveTab(role === 'admin' ? 'reviews' : 'requirements')
       return
     }
     const requirement = requirements.find((item) => item.id === task.target_id)
     if (!requirement) return
-    setActiveTab(role === 'sales' ? 'requirements' : 'reviews')
+    setActiveTab(role === 'admin' ? 'reviews' : 'requirements')
     void openDetail({ type: 'requirement', item: requirement })
   }
 
@@ -919,7 +919,7 @@ export default function WorkbenchPage() {
   const visibleTabKeys = role === 'admin'
     ? ['dashboard', 'projects', 'requirements', 'reviews', 'tags', 'matches']
     : role === 'research'
-      ? ['projects', 'requirements', 'reviews']
+      ? ['projects', 'requirements']
       : ['projects', 'requirements']
 
   return (
@@ -1202,10 +1202,20 @@ export default function WorkbenchPage() {
             },
             {
               key: 'requirements',
-              label: '需求表',
+              label: role === 'research' ? '匹配到的需求' : '需求表',
               children: (
-                <div className={`workbench-grid creation-workbench${capabilities.canCreateRequirement ? '' : ' read-only'}`}>
-                  {capabilities.canCreateRequirement && <section className="form-panel creation-form-panel">
+                role === 'research' ? (
+                  <ReviewQueue
+                    requirements={requirements}
+                    matches={matches}
+                    reviewer={displayName}
+                    role={role}
+                    onReviewed={loadData}
+                    onOpenRequirement={(requirement) => void openDetail({ type: 'requirement', item: requirement })}
+                  />
+                ) : (
+                  <div className={`workbench-grid creation-workbench${capabilities.canCreateRequirement ? '' : ' read-only'}`}>
+                    {capabilities.canCreateRequirement && <section className="form-panel creation-form-panel">
                     <Title level={4}>新建需求</Title>
                     <div className="creation-form-content">
                       <AIStructurePanel
@@ -1251,8 +1261,8 @@ export default function WorkbenchPage() {
                         </Button>
                       </Form>
                     </div>
-                  </section>}
-                  <section className="table-panel">
+                    </section>}
+                    <section className="table-panel">
                     <div className="table-toolbar">
                       {role === 'sales' && <Text type="secondary">仅展示我提交的需求</Text>}
                       <Select
@@ -1319,8 +1329,9 @@ export default function WorkbenchPage() {
                     ) : (
                       <Table rowKey="id" columns={requirementColumns} dataSource={filteredRequirements} loading={loading} pagination={false} scroll={{ x: 920 }} />
                     )}
-                  </section>
-                </div>
+                    </section>
+                  </div>
+                )
               ),
             },
             {
