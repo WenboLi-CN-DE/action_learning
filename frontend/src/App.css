@@ -903,7 +903,11 @@
 }
 
 .pilot-task-center {
-  margin-bottom: 24px;
+  margin-top: 24px;
+}
+
+.pilot-task-center .ant-card-body {
+  padding: 16px;
 }
 
 .pilot-section-heading {
@@ -937,10 +941,33 @@
 }
 
 .pilot-summary-card {
-  padding: 16px 18px;
+  padding: 8px 12px;
   background: #f4f9f5;
   border: 1px solid #dce9df;
-  border-radius: 14px;
+  border-radius: 10px;
+}
+
+.pilot-task-center .pilot-section-heading,
+.pilot-task-center .pilot-summary-grid {
+  margin-bottom: 12px;
+}
+
+.pilot-task-center .pilot-summary-card .ant-statistic-title {
+  margin-bottom: 2px;
+  font-size: 13px;
+}
+
+.pilot-task-center .pilot-summary-card .ant-statistic-content {
+  font-size: 24px;
+}
+
+.pilot-task-center .ant-empty {
+  margin-block: 8px 0;
+}
+
+.pilot-task-center .ant-empty-image {
+  height: 40px;
+  margin-bottom: 6px;
 }
 
 .pilot-summary-card.warning {
