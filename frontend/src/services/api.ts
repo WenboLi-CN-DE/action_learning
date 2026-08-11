@@ -102,6 +102,9 @@ export const fetchMatches = () => fetchJSON<MatchItem[]>('/matches')
 export const fetchLatestRequirementMatches = (requirementId: number) =>
   fetchJSON<AIMatchResult | null>(`/requirements/${requirementId}/ai-matches/latest`)
 
+export const fetchLatestRequirementMatchResults = () =>
+  fetchJSON<AIMatchResult[]>('/requirements/ai-match-results/latest')
+
 export const fetchPilotTasks = (role: PilotTaskResponse['role'], actor: string) => {
   const params = new URLSearchParams({ role, actor })
   return fetchJSON<PilotTaskResponse>(`/pilot/tasks?${params.toString()}`)
