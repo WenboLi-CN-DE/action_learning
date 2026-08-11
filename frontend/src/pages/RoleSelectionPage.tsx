@@ -27,7 +27,7 @@ const roleOptions: Array<{
     id: 'research',
     icon: <CodeOutlined />,
     title: ROLE_LABELS.research,
-    description: '维护能力池、评估待处理需求并确认匹配。',
+    description: '维护能力表、评估待处理需求并确认匹配。',
   },
   {
     id: 'admin',

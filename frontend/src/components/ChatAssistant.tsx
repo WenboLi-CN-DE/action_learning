@@ -58,7 +58,7 @@ export default function ChatAssistant() {
       setRequirementDraft(draft)
       setOpen(false)
       navigate('/')
-      messageApi.success('已生成需求草稿，请在需求池检查后提交')
+      messageApi.success('已生成需求草稿，请在需求表检查后提交')
     } catch (requestError) {
       messageApi.error(requestError instanceof Error ? requestError.message : '需求草稿生成失败')
     } finally {

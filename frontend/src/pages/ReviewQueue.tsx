@@ -121,7 +121,7 @@ export default function ReviewQueue({
           <Text type="secondary">
             {isAdmin
               ? '审核销售需求、编排能力关联，并对研发确认后的关联执行最终批准。'
-              : '维护能力池，并对管理员发起的需求—能力关联进行技术可行性确认。'}
+              : '维护能力表，并对管理员发起的需求—能力关联进行技术可行性确认。'}
           </Text>
         </div>
         <Space wrap>

@@ -88,7 +88,12 @@ import {
   getRequirementReviewPresentation,
   isRequirementDescriptionIncomplete,
 } from './requirementDetail'
-import { getRoleCapabilities, ROLE_LABELS } from '../auth/permissions'
+import {
+  getRoleCapabilities,
+  isSalesOwnRequirement,
+  isSalesVisibleProjectStatus,
+  ROLE_LABELS,
+} from '../auth/permissions'
 import { useRoleStore } from '../auth/roleStore'
 import { useAssistantStore } from '../stores/assistantStore'
 import schneiderLogo from '../assets/schneider-electric-cn-logo.png'
@@ -301,13 +306,16 @@ export default function WorkbenchPage() {
   const dashboardStats = useMemo(() => buildDashboardStats(dashboardData), [dashboardData])
 
   const filteredProjects = useMemo(() => {
-    if (selectedProjectTagId === null) return projects
-    return projects.filter((project) => project.tags.some((tag) => tag.id === selectedProjectTagId))
-  }, [projects, selectedProjectTagId])
+    const roleFiltered = role === 'sales'
+      ? projects.filter((project) => isSalesVisibleProjectStatus(project.status))
+      : projects
+    if (selectedProjectTagId === null) return roleFiltered
+    return roleFiltered.filter((project) => project.tags.some((tag) => tag.id === selectedProjectTagId))
+  }, [projects, role, selectedProjectTagId])
 
   const filteredRequirements = useMemo(() => {
     const roleFiltered = role === 'sales'
-      ? requirements.filter((requirement) => !requirement.submitted_by || requirement.submitted_by === displayName)
+      ? requirements.filter((requirement) => isSalesOwnRequirement(requirement.submitted_by, displayName))
       : requirements
     if (selectedRequirementTagId === null) return roleFiltered
     return roleFiltered.filter((requirement) => requirement.tags.some((tag) => tag.id === selectedRequirementTagId))
@@ -811,7 +819,7 @@ export default function WorkbenchPage() {
     ? ['dashboard', 'projects', 'requirements', 'reviews', 'tags', 'matches']
     : role === 'research'
       ? ['projects', 'requirements', 'reviews']
-      : ['requirements', 'projects']
+      : ['projects', 'requirements']
 
   return (
     <Layout className="app-shell">
@@ -872,10 +880,10 @@ export default function WorkbenchPage() {
         ) : (
           <div className="metric-strip">
             <div className="metric-card">
-              <Statistic title="能力池" value={projects.length} />
+              <Statistic title="能力表" value={role === 'sales' ? filteredProjects.length : projects.length} />
             </div>
             <div className="metric-card">
-              <Statistic title="需求池" value={requirements.length} />
+              <Statistic title="需求表" value={role === 'sales' ? filteredRequirements.length : requirements.length} />
             </div>
             <div className="metric-card">
               <Statistic title="标签" value={tags.length} />
@@ -931,11 +939,11 @@ export default function WorkbenchPage() {
                       </Text>
                     </div>
                     <div className="dashboard-card">
-                      <Statistic title="能力池" value={dashboardStats.projectCount} />
+                      <Statistic title="能力表" value={dashboardStats.projectCount} />
                       <Text type="secondary">当前视图内的后端预研能力</Text>
                     </div>
                     <div className="dashboard-card">
-                      <Statistic title="需求池" value={dashboardStats.requirementCount} />
+                      <Statistic title="需求表" value={dashboardStats.requirementCount} />
                       <Text type="secondary">当前视图内的客户需求</Text>
                     </div>
                     <div className="dashboard-card">
@@ -973,7 +981,7 @@ export default function WorkbenchPage() {
             },
             {
               key: 'projects',
-              label: '能力池',
+              label: '能力表',
               children: (
                 <div className={`workbench-grid creation-workbench${capabilities.canManageProjects ? '' : ' read-only'}`}>
                   {capabilities.canManageProjects && <section className="form-panel creation-form-panel">
@@ -1015,6 +1023,7 @@ export default function WorkbenchPage() {
                   </section>}
                   <section className="table-panel">
                     <div className="table-toolbar">
+                      {role === 'sales' && <Text type="secondary">仅展示可演示或已交付的能力</Text>}
                       <Select
                         className="table-filter"
                         allowClear
@@ -1031,7 +1040,7 @@ export default function WorkbenchPage() {
             },
             {
               key: 'requirements',
-              label: '需求池',
+              label: '需求表',
               children: (
                 <div className={`workbench-grid creation-workbench${capabilities.canCreateRequirement ? '' : ' read-only'}`}>
                   {capabilities.canCreateRequirement && <section className="form-panel creation-form-panel">
@@ -1083,6 +1092,7 @@ export default function WorkbenchPage() {
                   </section>}
                   <section className="table-panel">
                     <div className="table-toolbar">
+                      {role === 'sales' && <Text type="secondary">仅展示我提交的需求</Text>}
                       <Select
                         className="table-filter"
                         allowClear

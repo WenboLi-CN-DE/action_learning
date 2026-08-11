@@ -13,7 +13,7 @@ export interface RoleCapabilities {
 
 const CAPABILITIES: Record<RoleId, RoleCapabilities> = {
   sales: {
-    defaultTab: 'requirements',
+    defaultTab: 'projects',
     canCreateRequirement: true,
     canEditRequirement: true,
     canManageProjects: false,
@@ -42,6 +42,16 @@ const CAPABILITIES: Record<RoleId, RoleCapabilities> = {
     canReviewMatches: true,
     canManageKnowledge: true,
   },
+}
+
+const SALES_VISIBLE_PROJECT_STATUSES = new Set(['demo_ready', 'delivered'])
+
+export function isSalesVisibleProjectStatus(status: string) {
+  return SALES_VISIBLE_PROJECT_STATUSES.has(status)
+}
+
+export function isSalesOwnRequirement(submittedBy: string | null | undefined, displayName: string) {
+  return submittedBy === displayName
 }
 
 export const ROLE_LABELS: Record<RoleId, string> = {
