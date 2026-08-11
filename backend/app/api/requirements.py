@@ -1,5 +1,9 @@
+import asyncio
+import json
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select
 
 from app import llm_service
@@ -24,6 +28,7 @@ from app.schemas import (
 router = APIRouter(prefix="/requirements", tags=["requirements"])
 PLACEHOLDER_DESCRIPTIONS = {"具体可以联系", "具体可联系", "后续联系", "待补充"}
 MAX_LLM_MATCH_CANDIDATES = 10
+AI_MATCH_TOTAL_TIMEOUT_SECONDS = 45.0
 
 
 def validate_requirement_identity_and_description(
@@ -219,57 +224,20 @@ def assign_requirement_reviewer(
     return requirement
 
 
-@router.post("/{requirement_id}/ai-matches", response_model=AIMatchResult)
-def analyze_requirement_matches(
+def build_ai_match_result(
+    *,
     requirement_id: int,
-    payload: AIMatchRequest,
-    session: Session = Depends(get_session),
-):
-    requirement = session.get(Requirement, requirement_id)
-    if requirement is None:
-        raise HTTPException(status_code=404, detail="Requirement not found")
-
-    projects = list(session.exec(select(Project)).all())
-    if not projects:
-        model = payload.model or llm_service.get_default_model()
-        return AIMatchResult(requirement_id=requirement_id, model=model)
-
-    api_key, model, base_url = llm_service.resolve_qwen_config(
-        payload.api_key, payload.model, payload.base_url
-    )
-
-    candidates = rank_project_candidates(requirement, projects)[:MAX_LLM_MATCH_CANDIDATES]
-    try:
-        analysis = llm_service.call_qwen_for_matching(
-            requirement_context=requirement_context(requirement),
-            candidates=candidates,
-            api_key=api_key,
-            model=model,
-            base_url=base_url,
-        )
-    except httpx.TimeoutException as exc:
-        raise HTTPException(
-            status_code=504,
-            detail="AI 匹配超时：模型分析时间过长，请重试",
-        ) from exc
-    except httpx.HTTPStatusError as exc:
-        raise HTTPException(status_code=502, detail=f"AI 匹配失败：上游服务返回 {exc.response.status_code}") from exc
-    except httpx.RequestError as exc:
-        raise HTTPException(status_code=502, detail="AI 匹配失败：无法连接模型服务") from exc
-    except (KeyError, TypeError, ValueError) as exc:
-        raise HTTPException(status_code=502, detail="AI 匹配失败：模型返回格式无效") from exc
-
+    model: str,
+    analysis: dict,
+    projects: list[Project],
+    existing_ids: set[int],
+    top_k: int,
+    fallback_used: bool = False,
+    warnings: list[str] | None = None,
+) -> AIMatchResult:
     project_map = {project.id: project for project in projects}
-    existing_ids = set(
-        session.exec(
-            select(ProjectRequirementMatch.project_id).where(
-                ProjectRequirementMatch.requirement_id == requirement_id,
-                ProjectRequirementMatch.review_status != "rejected",
-            )
-        ).all()
-    )
     recommendations: list[AIMatchRecommendation] = []
-    for item in analysis.get("recommendations", [])[: max(1, min(payload.top_k, 10))]:
+    for item in analysis.get("recommendations", [])[: max(1, min(top_k, 10))]:
         project_id = int(item.get("project_id", 0))
         project = project_map.get(project_id)
         if project is None:
@@ -300,6 +268,159 @@ def analyze_requirement_matches(
         requirement_id=requirement_id,
         model=model,
         recommendations=recommendations,
+        fallback_used=fallback_used,
+        warnings=warnings or [],
+    )
+
+
+def stream_event(event: str, payload: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+@router.post("/{requirement_id}/ai-matches", response_model=AIMatchResult)
+async def analyze_requirement_matches(
+    requirement_id: int,
+    payload: AIMatchRequest,
+    session: Session = Depends(get_session),
+):
+    requirement = session.get(Requirement, requirement_id)
+    if requirement is None:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+
+    projects = list(session.exec(select(Project)).all())
+    if not projects:
+        model = payload.model or llm_service.get_default_model()
+        return AIMatchResult(requirement_id=requirement_id, model=model)
+
+    api_key, model, base_url = llm_service.resolve_qwen_config(
+        payload.api_key, payload.model, payload.base_url
+    )
+
+    candidates = rank_project_candidates(requirement, projects)[:MAX_LLM_MATCH_CANDIDATES]
+    try:
+        analysis = await asyncio.wait_for(
+            asyncio.to_thread(
+                llm_service.call_qwen_for_matching,
+                requirement_context=requirement_context(requirement),
+                candidates=candidates,
+                api_key=api_key,
+                model=model,
+                base_url=base_url,
+            ),
+            timeout=AI_MATCH_TOTAL_TIMEOUT_SECONDS,
+        )
+    except (TimeoutError, httpx.TimeoutException) as exc:
+        raise HTTPException(
+            status_code=504,
+            detail="AI 匹配超时：模型分析时间过长，请重试",
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=502, detail=f"AI 匹配失败：上游服务返回 {exc.response.status_code}") from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail="AI 匹配失败：无法连接模型服务") from exc
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail="AI 匹配失败：模型返回格式无效") from exc
+
+    existing_ids = set(
+        session.exec(
+            select(ProjectRequirementMatch.project_id).where(
+                ProjectRequirementMatch.requirement_id == requirement_id,
+                ProjectRequirementMatch.review_status != "rejected",
+            )
+        ).all()
+    )
+    return build_ai_match_result(
+        requirement_id=requirement_id,
+        model=model,
+        analysis=analysis,
+        projects=projects,
+        existing_ids=existing_ids,
+        top_k=payload.top_k,
+    )
+
+
+@router.post("/{requirement_id}/ai-matches/stream")
+async def stream_requirement_matches(
+    requirement_id: int,
+    payload: AIMatchRequest,
+    session: Session = Depends(get_session),
+):
+    requirement = session.get(Requirement, requirement_id)
+    if requirement is None:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+
+    projects = list(session.exec(select(Project)).all())
+    model = payload.model or llm_service.get_default_model()
+    if not projects:
+        result = AIMatchResult(requirement_id=requirement_id, model=model)
+
+        async def empty_stream():
+            yield stream_event("result", result.model_dump(mode="json"))
+
+        return StreamingResponse(empty_stream(), media_type="text/event-stream")
+
+    api_key, model, base_url = llm_service.resolve_qwen_config(
+        payload.api_key, payload.model, payload.base_url
+    )
+    candidates = rank_project_candidates(requirement, projects)[:MAX_LLM_MATCH_CANDIDATES]
+    existing_ids = set(
+        session.exec(
+            select(ProjectRequirementMatch.project_id).where(
+                ProjectRequirementMatch.requirement_id == requirement_id,
+                ProjectRequirementMatch.review_status != "rejected",
+            )
+        ).all()
+    )
+
+    def fallback_result(message: str) -> AIMatchResult:
+        return AIMatchResult(
+            requirement_id=requirement_id,
+            model=model,
+            fallback_used=True,
+            warnings=[message],
+        )
+
+    async def event_stream():
+        yield stream_event("progress", {"message": f"已完成本地候选筛选，正在分析 {len(candidates)} 项能力"})
+        chunks: list[str] = []
+        try:
+            async with asyncio.timeout(AI_MATCH_TOTAL_TIMEOUT_SECONDS):
+                async for content in llm_service.stream_qwen_for_matching(
+                    requirement_context=requirement_context(requirement),
+                    candidates=candidates,
+                    api_key=api_key,
+                    model=model,
+                    base_url=base_url,
+                ):
+                    chunks.append(content)
+                    yield stream_event("content", {"text": content})
+        except TimeoutError:
+            yield stream_event("result", fallback_result("AI 匹配在 45 秒内未完成，未生成推荐；请稍后重试。").model_dump(mode="json"))
+            return
+        except (httpx.HTTPError, ValueError):
+            yield stream_event("result", fallback_result("AI 匹配服务暂不可用，未生成推荐；请稍后重试。").model_dump(mode="json"))
+            return
+
+        try:
+            analysis = json.loads("".join(chunks))
+            if not isinstance(analysis, dict):
+                raise ValueError("invalid matching payload")
+            result = build_ai_match_result(
+                requirement_id=requirement_id,
+                model=model,
+                analysis=analysis,
+                projects=projects,
+                existing_ids=existing_ids,
+                top_k=payload.top_k,
+            )
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            result = fallback_result("AI 返回内容不完整，未生成推荐；请稍后重试。")
+        yield stream_event("result", result.model_dump(mode="json"))
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

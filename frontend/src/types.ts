@@ -109,6 +109,8 @@ export interface AIMatchResult {
   requirement_id: number
   model: string
   recommendations: AIMatchRecommendation[]
+  fallback_used: boolean
+  warnings: string[]
 }
 
 export type CommentTargetType = 'project' | 'requirement'

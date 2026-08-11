@@ -22,7 +22,7 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import { EditOutlined, EyeOutlined, LinkOutlined, LogoutOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons'
 import {
-  analyzeRequirementMatches,
+  analyzeRequirementMatchesStream,
   assignRequirementReviewer,
   createComment,
   createMatch,
@@ -224,6 +224,8 @@ export default function WorkbenchPage() {
   const [requirementAILoading, setRequirementAILoading] = useState(false)
   const [aiMatchResult, setAIMatchResult] = useState<AIMatchResult | null>(null)
   const [aiMatchLoading, setAIMatchLoading] = useState(false)
+  const [aiMatchProgress, setAIMatchProgress] = useState('')
+  const [aiMatchPreview, setAIMatchPreview] = useState('')
   const [loading, setLoading] = useState(false)
   const [commentsLoading, setCommentsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -583,10 +585,20 @@ export default function WorkbenchPage() {
   async function runAIMatching() {
     if (detailTarget?.type !== 'requirement') return
     setAIMatchLoading(true)
+    setAIMatchResult(null)
+    setAIMatchProgress('正在连接 AI 匹配服务')
+    setAIMatchPreview('')
     try {
-      const result = await analyzeRequirementMatches(detailTarget.item.id, 5, llmSettings)
+      const result = await analyzeRequirementMatchesStream(detailTarget.item.id, 5, llmSettings, (event) => {
+        if (event.type === 'progress') setAIMatchProgress(event.message)
+        if (event.type === 'content') {
+          setAIMatchProgress('正在生成可见的匹配结果')
+          setAIMatchPreview((current) => `${current}${event.text}`.slice(-1200))
+        }
+      })
       setAIMatchResult(result)
-      if (result.recommendations.length === 0) messageApi.info('AI 未发现达到阈值的候选能力')
+      if (result.fallback_used) messageApi.warning(result.warnings[0] ?? 'AI 匹配未完成')
+      else if (result.recommendations.length === 0) messageApi.info('AI 未发现达到阈值的候选能力')
     } catch (err) {
       messageApi.error(err instanceof Error ? err.message : 'AI 匹配分析失败')
     } finally {
@@ -1439,10 +1451,23 @@ export default function WorkbenchPage() {
               )}
             >
               {!aiMatchResult && (
-                <Text type="secondary">基于需求内容分析候选能力；推荐结果仍需研发确认和管理员批准。</Text>
+                <Space direction="vertical" size="small">
+                  <Text type="secondary">基于需求内容分析候选能力；推荐结果仍需研发确认和管理员批准。</Text>
+                  {aiMatchLoading && (
+                    <Alert
+                      type="info"
+                      showIcon
+                      message={aiMatchProgress}
+                      description={aiMatchPreview || '不会展示或保存模型内部思考内容。'}
+                    />
+                  )}
+                </Space>
               )}
               {aiMatchResult && (
                 <Space direction="vertical" size="middle" style={{ display: 'flex' }}>
+                  {aiMatchResult.warnings.map((warning) => (
+                    <Alert key={warning} type="warning" showIcon message={warning} />
+                  ))}
                   {aiMatchResult.recommendations.map((recommendation) => (
                     <Card
                       key={recommendation.project_id}

@@ -165,6 +165,61 @@ export const analyzeRequirementMatches = (
     body: JSON.stringify({ top_k: topK, ...(settings ?? {}) }),
   })
 
+type AIMatchStreamEvent =
+  | { type: 'progress'; message: string }
+  | { type: 'content'; text: string }
+  | { type: 'result'; result: AIMatchResult }
+
+function parseAIMatchStreamEvent(block: string): AIMatchStreamEvent | null {
+  const event = block.match(/^event: (.+)$/m)?.[1]
+  const data = block.match(/^data: (.+)$/m)?.[1]
+  if (!event || !data) return null
+  const payload = JSON.parse(data) as Record<string, unknown>
+  if (event === 'progress' && typeof payload.message === 'string') return { type: 'progress', message: payload.message }
+  if (event === 'content' && typeof payload.text === 'string') return { type: 'content', text: payload.text }
+  if (event === 'result') return { type: 'result', result: payload as unknown as AIMatchResult }
+  return null
+}
+
+export async function analyzeRequirementMatchesStream(
+  requirementId: number,
+  topK: number,
+  settings: LLMSettings | null,
+  onEvent: (event: AIMatchStreamEvent) => void,
+): Promise<AIMatchResult> {
+  const response = await fetch(`${API_BASE}/requirements/${requirementId}/ai-matches/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    body: JSON.stringify({ top_k: topK, ...(settings ?? {}) }),
+  })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const detail = typeof payload?.detail === 'string' ? payload.detail : null
+    throw new Error(detail ?? `API Error: ${response.status} ${response.statusText}`)
+  }
+  if (!response.body) throw new Error('AI 匹配未返回流式响应')
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let pending = ''
+  let result: AIMatchResult | null = null
+  while (true) {
+    const { value, done } = await reader.read()
+    pending += decoder.decode(value, { stream: !done })
+    const blocks = pending.split('\n\n')
+    pending = blocks.pop() ?? ''
+    for (const block of blocks) {
+      const event = parseAIMatchStreamEvent(block)
+      if (!event) continue
+      onEvent(event)
+      if (event.type === 'result') result = event.result
+    }
+    if (done) break
+  }
+  if (!result) throw new Error('AI 匹配未返回最终结果')
+  return result
+}
+
 export const fetchComments = (targetType: CommentPayload['target_type'], targetId: number) =>
   fetchJSON<CommentItem[]>(`/comments?target_type=${targetType}&target_id=${targetId}`)
 

@@ -1,3 +1,5 @@
+import json
+
 import httpx
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -44,6 +46,14 @@ def test_qwen_matching_disables_thinking(monkeypatch):
 
     assert result == {"recommendations": []}
     assert captured_payload["enable_thinking"] is False
+
+
+def test_matching_stream_ignores_reasoning_and_keeps_visible_content():
+    reasoning_chunk = {"choices": [{"delta": {"reasoning_content": "不应展示"}}]}
+    content_chunk = {"choices": [{"delta": {"content": "可展示的匹配结果"}}]}
+
+    assert llm_service.extract_visible_stream_content(reasoning_chunk) == ""
+    assert llm_service.extract_visible_stream_content(content_chunk) == "可展示的匹配结果"
 
 
 def _create_project(name: str, description: str, tag_ids: list[int]):
@@ -136,6 +146,51 @@ def test_ai_matching_ranks_candidates_and_can_be_confirmed(monkeypatch):
     assert confirmed.status_code == 201
     assert confirmed.json()["source"] == "ai"
     assert confirmed.json()["ai_score"] == 92
+
+
+def test_ai_matching_streams_visible_output_and_final_result(monkeypatch):
+    monkeypatch.setenv("QWEN_API_KEY", "system-key")
+    relevant = _create_project("流式匹配能力", "可用于验证实时输出和最终匹配结果。", [])
+    requirement = client.post(
+        "/api/v1/requirements",
+        json={
+            "title": "流式匹配需求",
+            "description": "验证 AI 能力匹配的实时可见输出。",
+            "customer": "测试客户",
+            "urgency": "medium",
+            "status": "new",
+            "submitted_by": "测试销售",
+            "tag_ids": [],
+        },
+    ).json()
+    visible_payload = {
+        "recommendations": [
+            {
+                "project_id": relevant["id"],
+                "score": 80,
+                "coverage_status": "partial",
+                "reason": "能力方向与需求相关。",
+                "gaps": ["需确认交付范围"],
+                "dimensions": {"semantic": 80},
+            }
+        ]
+    }
+
+    async def fake_stream(**_kwargs):
+        yield json.dumps(visible_payload, ensure_ascii=False)
+
+    monkeypatch.setattr("app.llm_service.stream_qwen_for_matching", fake_stream)
+    response = client.post(
+        f"/api/v1/requirements/{requirement['id']}/ai-matches/stream",
+        json={"top_k": 5},
+    )
+
+    assert response.status_code == 200
+    assert "event: progress" in response.text
+    assert "event: content" in response.text
+    assert "event: result" in response.text
+    assert "能力方向与需求相关" in response.text
+    assert "不应展示" not in response.text
 
 
 def test_ai_matching_requires_an_existing_requirement(monkeypatch):

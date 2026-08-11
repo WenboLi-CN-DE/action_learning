@@ -280,6 +280,65 @@ def call_qwen_for_matching(
     return payload if isinstance(payload, dict) else {"recommendations": []}
 
 
+def extract_visible_stream_content(chunk: dict[str, Any]) -> str:
+    """只转发模型的可见回答字段，永不转发 reasoning_content。"""
+    choices = chunk.get("choices", [])
+    if not choices or not isinstance(choices[0], dict):
+        return ""
+    delta = choices[0].get("delta", {})
+    if not isinstance(delta, dict):
+        return ""
+    content = delta.get("content", "")
+    return content if isinstance(content, str) else ""
+
+
+async def stream_qwen_for_matching(
+    *, requirement_context: str, candidates: list[dict[str, Any]],
+    api_key: str, model: str, base_url: str,
+):
+    """以 SSE 接收匹配结果，只产出用户可见 content 分片。"""
+    system = (
+        "你是施耐德电气内部需求与能力匹配分析专家。只评估提供的候选能力，禁止编造能力。"
+        "综合语义、行业、业务场景和交付可行性评分。score 取 0-100；coverage_status 只能是 covered、partial、uncovered。"
+        "必须给出简洁可核验的 reason、gaps，以及 semantic、industry、scenario、delivery 四维评分。只返回 JSON。"
+    )
+    user = (
+        f"需求：\n{requirement_context}\n\n候选能力：\n{json.dumps(candidates, ensure_ascii=False)}\n"
+        '返回格式：{"recommendations":[{"project_id":1,"score":80,"coverage_status":"partial",'
+        '"reason":"...","gaps":["..."],"dimensions":{"semantic":80,"industry":80,"scenario":80,"delivery":80}}]}。'
+        "按 score 降序，最多返回 5 条；低于 40 分的候选不返回。"
+    )
+    timeout = httpx.Timeout(timeout=20.0, connect=10.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        async with client.stream(
+            "POST",
+            f"{base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": model,
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+                "response_format": {"type": "json_object"},
+                "temperature": 0.1,
+                "enable_thinking": False,
+                "stream": True,
+            },
+        ) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                data = line.removeprefix("data:").strip()
+                if data == "[DONE]":
+                    return
+                try:
+                    chunk = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+                content = extract_visible_stream_content(chunk)
+                if content:
+                    yield content
+
+
 def call_qwen_for_rag_chat(
     *,
     question: str,

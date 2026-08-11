@@ -223,6 +223,8 @@ class AIMatchResult(SQLModel):
     requirement_id: int
     model: str
     recommendations: list[AIMatchRecommendation] = []
+    fallback_used: bool = False
+    warnings: list[str] = []
 
 
 class RAGIngestRequest(SQLModel):
