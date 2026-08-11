@@ -292,6 +292,61 @@ def extract_visible_stream_content(chunk: dict[str, Any]) -> str:
     return content if isinstance(content, str) else ""
 
 
+class VisibleContentStreamFilter:
+    """跨 SSE 分片剥离可能被上游混入 content 的 <think> 内容。"""
+
+    _OPEN = "<think>"
+    _CLOSE = "</think>"
+
+    def __init__(self) -> None:
+        self._pending = ""
+        self._inside_thinking = False
+
+    def add(self, content: str) -> str:
+        self._pending += content
+        visible: list[str] = []
+        while self._pending:
+            if self._inside_thinking:
+                close_index = self._pending.find(self._CLOSE)
+                if close_index < 0:
+                    self._pending = self._pending[-(len(self._CLOSE) - 1):]
+                    return "".join(visible)
+                self._pending = self._pending[close_index + len(self._CLOSE):]
+                self._inside_thinking = False
+                continue
+
+            open_index = self._pending.find(self._OPEN)
+            if open_index >= 0:
+                visible.append(self._pending[:open_index])
+                self._pending = self._pending[open_index + len(self._OPEN):]
+                self._inside_thinking = True
+                continue
+
+            prefix_length = next(
+                (
+                    length
+                    for length in range(min(len(self._OPEN) - 1, len(self._pending)), 0, -1)
+                    if self._OPEN.startswith(self._pending[-length:])
+                ),
+                0,
+            )
+            if prefix_length:
+                visible.append(self._pending[:-prefix_length])
+                self._pending = self._pending[-prefix_length:]
+            else:
+                visible.append(self._pending)
+                self._pending = ""
+            return "".join(visible)
+        return "".join(visible)
+
+    def finish(self) -> str:
+        if self._inside_thinking or self._pending.startswith("<"):
+            return ""
+        result = self._pending
+        self._pending = ""
+        return result
+
+
 async def stream_qwen_for_matching(
     *, requirement_context: str, candidates: list[dict[str, Any]],
     api_key: str, model: str, base_url: str,
@@ -308,7 +363,8 @@ async def stream_qwen_for_matching(
         '"reason":"...","gaps":["..."],"dimensions":{"semantic":80,"industry":80,"scenario":80,"delivery":80}}]}。'
         "按 score 降序，最多返回 5 条；低于 40 分的候选不返回。"
     )
-    timeout = httpx.Timeout(timeout=20.0, connect=10.0)
+    # 外层路由的总截止时间负责中断整体请求；这里不可更短，否则慢模型首分片会被过早放弃。
+    timeout = httpx.Timeout(timeout=60.0, connect=10.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
         async with client.stream(
             "POST",
@@ -324,6 +380,7 @@ async def stream_qwen_for_matching(
             },
         ) as response:
             response.raise_for_status()
+            content_filter = VisibleContentStreamFilter()
             async for line in response.aiter_lines():
                 if not line.startswith("data:"):
                     continue
@@ -336,7 +393,12 @@ async def stream_qwen_for_matching(
                     continue
                 content = extract_visible_stream_content(chunk)
                 if content:
-                    yield content
+                    visible_content = content_filter.add(content)
+                    if visible_content:
+                        yield visible_content
+            visible_content = content_filter.finish()
+            if visible_content:
+                yield visible_content
 
 
 def call_qwen_for_rag_chat(

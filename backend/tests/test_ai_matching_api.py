@@ -56,6 +56,15 @@ def test_matching_stream_ignores_reasoning_and_keeps_visible_content():
     assert llm_service.extract_visible_stream_content(content_chunk) == "可展示的匹配结果"
 
 
+def test_matching_stream_hides_thinking_markers_split_across_content_chunks():
+    content_filter = llm_service.VisibleContentStreamFilter()
+
+    assert content_filter.add("可展示<thi") == "可展示"
+    assert content_filter.add("nk>内部推断</th") == ""
+    assert content_filter.add("ink>结果") == "结果"
+    assert content_filter.finish() == ""
+
+
 def _create_project(name: str, description: str, tag_ids: list[int]):
     return client.post(
         "/api/v1/projects",
