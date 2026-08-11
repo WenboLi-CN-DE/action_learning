@@ -28,6 +28,7 @@ import {
 import { getRoleCapabilities } from '../auth/permissions'
 import { useRoleStore } from '../auth/roleStore'
 import type { RAGChunk, RAGDocumentItem, RAGQueryResult } from '../types'
+import MarkdownAnswer from '../components/MarkdownAnswer'
 
 const { Header, Content } = Layout
 const { Title, Text, Paragraph } = Typography
@@ -305,9 +306,7 @@ export default function KnowledgeSearchPage() {
         {!loading && result && (
           <>
             <Card title="AI 回答" style={{ marginBottom: 24 }}>
-              <Paragraph style={{ whiteSpace: 'pre-wrap', fontSize: 15 }}>
-                {result.answer}
-              </Paragraph>
+              <MarkdownAnswer content={result.answer} />
               {result.citations.length > 0 && (
                 <div style={{ marginTop: 12 }}>
                   <Text type="secondary">引用来源：</Text>
