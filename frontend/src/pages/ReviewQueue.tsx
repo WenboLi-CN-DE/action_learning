@@ -121,7 +121,7 @@ export default function ReviewQueue({
           <Text type="secondary">
             {isAdmin
               ? '审核销售需求、编排能力关联，并对研发确认后的关联执行最终批准。'
-              : '维护能力表，并对管理员发起的需求—能力关联进行技术可行性确认。'}
+              : '维护能力表，查看 AI 推荐能力，并对管理员发起的需求—能力关联进行技术可行性确认。'}
           </Text>
         </div>
         <Space wrap>
@@ -220,6 +220,15 @@ export default function ReviewQueue({
                   render: (value) => <Tag>{value === 'matching' ? '匹配中' : '已受理'}</Tag>,
                 },
                 { title: '需求描述', dataIndex: 'description', key: 'description', ellipsis: true },
+                {
+                  title: '操作',
+                  key: 'action',
+                  render: (_, record) => (
+                    <Button size="small" type="primary" onClick={() => onOpenRequirement(record)}>
+                      查看并分析
+                    </Button>
+                  ),
+                },
               ]}
             />
           )}

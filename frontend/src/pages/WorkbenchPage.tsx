@@ -1614,7 +1614,11 @@ export default function WorkbenchPage() {
             >
               {!aiMatchResult && (
                 <Space direction="vertical" size="small">
-                  <Text type="secondary">基于需求内容分析候选能力；推荐结果仍需研发确认和管理员批准。</Text>
+                  <Text type="secondary">
+                    {role === 'research'
+                      ? 'AI 推荐用于技术评估；正式关联由管理员发起后，请在“待技术确认关联”中确认或拒绝。'
+                      : '基于需求内容分析候选能力；推荐结果仍需研发确认和管理员批准。'}
+                  </Text>
                   {aiMatchLoading && (
                     <Alert
                       type="info"
@@ -1662,6 +1666,14 @@ export default function WorkbenchPage() {
                   ))}
                   {aiMatchResult.recommendations.length === 0 && (
                     <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未发现达到阈值的候选能力" />
+                  )}
+                  {role === 'research' && aiMatchResult.recommendations.length > 0 && (
+                    <Alert
+                      type="info"
+                      showIcon
+                      message="技术评估提示"
+                      description="这些是 AI 候选能力。管理员发起正式关联后，研发可在“待技术确认关联”中补充技术意见并完成确认。"
+                    />
                   )}
                   <Text type="secondary">模型：{aiMatchResult.model}</Text>
                 </Space>
