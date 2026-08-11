@@ -137,6 +137,10 @@ def test_ai_matching_ranks_candidates_and_can_be_confirmed(monkeypatch):
     assert result["recommendations"][0]["score"] == 92
     assert result["recommendations"][0]["already_confirmed"] is False
 
+    persisted = client.get(f"/api/v1/requirements/{requirement['id']}/ai-matches/latest")
+    assert persisted.status_code == 200
+    assert persisted.json()["recommendations"][0]["project_id"] == relevant["id"]
+
     recommendation = result["recommendations"][0]
     confirmed = client.post(
         "/api/v1/matches",
@@ -200,6 +204,10 @@ def test_ai_matching_streams_visible_output_and_final_result(monkeypatch):
     assert "event: result" in response.text
     assert "能力方向与需求相关" in response.text
     assert "不应展示" not in response.text
+
+    persisted = client.get(f"/api/v1/requirements/{requirement['id']}/ai-matches/latest")
+    assert persisted.status_code == 200
+    assert persisted.json()["recommendations"][0]["score"] == 80
 
 
 def test_ai_matching_requires_an_existing_requirement(monkeypatch):

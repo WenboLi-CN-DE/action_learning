@@ -11,7 +11,15 @@ from app import llm_service
 from app.ai_matching import rank_project_candidates, requirement_context
 from app.api.utils import load_tags
 from app.database import get_session
-from app.models import Project, ProjectRequirementMatch, Requirement, ReviewEvent, utc_now
+from app.models import (
+    Project,
+    ProjectRequirementMatch,
+    Requirement,
+    RequirementAIMatchCandidate,
+    RequirementAIMatchRun,
+    ReviewEvent,
+    utc_now,
+)
 from app.rag.sync import sync_requirement_to_rag
 from app.schemas import (
     AIMatchRecommendation,
@@ -275,6 +283,86 @@ def build_ai_match_result(
     )
 
 
+def persist_ai_match_result(session: Session, result: AIMatchResult) -> None:
+    """保存成功的 AI 候选结果，不创建正式 ProjectRequirementMatch。"""
+    if result.fallback_used:
+        return
+    run = RequirementAIMatchRun(
+        requirement_id=result.requirement_id,
+        model=result.model,
+        fallback_used=False,
+        warnings=result.warnings,
+    )
+    session.add(run)
+    session.flush()
+    for recommendation in result.recommendations:
+        session.add(
+            RequirementAIMatchCandidate(
+                run_id=run.id,
+                project_id=recommendation.project_id,
+                score=recommendation.score,
+                coverage_status=recommendation.coverage_status,
+                reason=recommendation.reason,
+                gaps=recommendation.gaps,
+                dimensions=recommendation.dimensions,
+            )
+        )
+    session.commit()
+
+
+def load_latest_ai_match_result(
+    session: Session,
+    requirement_id: int,
+    projects: list[Project] | None = None,
+) -> AIMatchResult | None:
+    run = session.exec(
+        select(RequirementAIMatchRun)
+        .where(RequirementAIMatchRun.requirement_id == requirement_id)
+        .order_by(RequirementAIMatchRun.created_at.desc())
+    ).first()
+    if run is None:
+        return None
+
+    project_map = {project.id: project for project in (projects or list(session.exec(select(Project)).all()))}
+    existing_ids = set(
+        session.exec(
+            select(ProjectRequirementMatch.project_id).where(
+                ProjectRequirementMatch.requirement_id == requirement_id,
+                ProjectRequirementMatch.review_status != "rejected",
+            )
+        ).all()
+    )
+    recommendations: list[AIMatchRecommendation] = []
+    candidates = session.exec(
+        select(RequirementAIMatchCandidate)
+        .where(RequirementAIMatchCandidate.run_id == run.id)
+        .order_by(RequirementAIMatchCandidate.score.desc())
+    ).all()
+    for candidate in candidates:
+        project = project_map.get(candidate.project_id)
+        if project is None:
+            continue
+        recommendations.append(
+            AIMatchRecommendation(
+                project_id=candidate.project_id,
+                project=ProjectRead.model_validate(project),
+                score=candidate.score,
+                coverage_status=candidate.coverage_status,
+                reason=candidate.reason,
+                gaps=candidate.gaps,
+                dimensions=candidate.dimensions,
+                already_confirmed=candidate.project_id in existing_ids,
+            )
+        )
+    return AIMatchResult(
+        requirement_id=requirement_id,
+        model=run.model,
+        recommendations=recommendations,
+        fallback_used=run.fallback_used,
+        warnings=run.warnings,
+    )
+
+
 def stream_event(event: str, payload: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
@@ -292,7 +380,9 @@ async def analyze_requirement_matches(
     projects = list(session.exec(select(Project)).all())
     if not projects:
         model = payload.model or llm_service.get_default_model()
-        return AIMatchResult(requirement_id=requirement_id, model=model)
+        result = AIMatchResult(requirement_id=requirement_id, model=model)
+        persist_ai_match_result(session, result)
+        return result
 
     api_key, model, base_url = llm_service.resolve_qwen_config(
         payload.api_key, payload.model, payload.base_url
@@ -331,7 +421,7 @@ async def analyze_requirement_matches(
             )
         ).all()
     )
-    return build_ai_match_result(
+    result = build_ai_match_result(
         requirement_id=requirement_id,
         model=model,
         analysis=analysis,
@@ -339,6 +429,8 @@ async def analyze_requirement_matches(
         existing_ids=existing_ids,
         top_k=payload.top_k,
     )
+    persist_ai_match_result(session, result)
+    return result
 
 
 @router.post("/{requirement_id}/ai-matches/stream")
@@ -355,6 +447,7 @@ async def stream_requirement_matches(
     model = payload.model or llm_service.get_default_model()
     if not projects:
         result = AIMatchResult(requirement_id=requirement_id, model=model)
+        persist_ai_match_result(session, result)
 
         async def empty_stream():
             yield stream_event("result", result.model_dump(mode="json"))
@@ -422,6 +515,7 @@ async def stream_requirement_matches(
                 existing_ids=existing_ids,
                 top_k=payload.top_k,
             )
+            persist_ai_match_result(session, result)
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             result = fallback_result("AI 返回内容不完整，未生成推荐；请稍后重试。")
         yield stream_event("result", result.model_dump(mode="json"))
@@ -431,6 +525,17 @@ async def stream_requirement_matches(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.get("/{requirement_id}/ai-matches/latest", response_model=AIMatchResult | None)
+def get_latest_requirement_matches(
+    requirement_id: int,
+    session: Session = Depends(get_session),
+):
+    if session.get(Requirement, requirement_id) is None:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    projects = list(session.exec(select(Project)).all())
+    return load_latest_ai_match_result(session, requirement_id, projects)
 
 
 @router.get("/{requirement_id}", response_model=RequirementRead)

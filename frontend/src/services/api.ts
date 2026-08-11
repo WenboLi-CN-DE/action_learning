@@ -99,6 +99,9 @@ export const createTag = (payload: TagPayload) =>
 
 export const fetchMatches = () => fetchJSON<MatchItem[]>('/matches')
 
+export const fetchLatestRequirementMatches = (requirementId: number) =>
+  fetchJSON<AIMatchResult | null>(`/requirements/${requirementId}/ai-matches/latest`)
+
 export const fetchPilotTasks = (role: PilotTaskResponse['role'], actor: string) => {
   const params = new URLSearchParams({ role, actor })
   return fetchJSON<PilotTaskResponse>(`/pilot/tasks?${params.toString()}`)

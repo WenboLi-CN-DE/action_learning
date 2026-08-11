@@ -92,6 +92,31 @@ class ProjectRequirementMatch(SQLModel, table=True):
     requirement: Optional[Requirement] = Relationship(back_populates="matches")
 
 
+class RequirementAIMatchRun(SQLModel, table=True):
+    """一次 AI 匹配运行；候选结果持久化但不等同于正式关联。"""
+
+    id: int | None = Field(default=None, primary_key=True)
+    requirement_id: int = Field(foreign_key="requirement.id", index=True)
+    model: str = Field(max_length=100)
+    fallback_used: bool = Field(default=False)
+    warnings: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class RequirementAIMatchCandidate(SQLModel, table=True):
+    """AI 匹配运行中的候选能力，不进入正式关联审核状态机。"""
+
+    id: int | None = Field(default=None, primary_key=True)
+    run_id: int = Field(foreign_key="requirementaimatchrun.id", index=True)
+    project_id: int = Field(foreign_key="project.id", index=True)
+    score: float = Field(default=0.0)
+    coverage_status: str = Field(max_length=50)
+    reason: str = Field(default="", max_length=2000)
+    gaps: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    dimensions: dict[str, float] = Field(default_factory=dict, sa_column=Column(JSON))
+    created_at: datetime = Field(default_factory=utc_now)
+
+
 class Comment(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     target_type: str = Field(max_length=50, index=True)

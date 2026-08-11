@@ -31,6 +31,7 @@ import {
   createTag,
   fetchComments,
   fetchLLMStatus,
+  fetchLatestRequirementMatches,
   fetchMatches,
   fetchPilotMetrics,
   fetchPilotTasks,
@@ -349,6 +350,17 @@ export default function WorkbenchPage() {
     return recommendations.filter((recommendation) => recommendation.coverage_status === capabilityCoverageFilter)
   }, [capabilityCoverageFilter, selectedCapabilityMatchResult])
 
+  const loadLatestAIMatchResult = useCallback(async (requirementId: number) => {
+    try {
+      const result = await fetchLatestRequirementMatches(requirementId)
+      if (!result) return null
+      setAIMatchResults((current) => ({ ...current, [requirementId]: result }))
+      return result
+    } catch {
+      return null
+    }
+  }, [])
+
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
@@ -547,6 +559,10 @@ export default function WorkbenchPage() {
         : '',
     )
     commentForm.setFieldsValue({ author: displayName, content: '' })
+    const latestMatchResult = target.type === 'requirement'
+      ? await loadLatestAIMatchResult(target.item.id)
+      : null
+    if (latestMatchResult) setAIMatchResult(latestMatchResult)
     await Promise.all([
       loadComments(target),
       target.type === 'requirement'
@@ -1136,6 +1152,9 @@ export default function WorkbenchPage() {
                             onChange={(value?: number) => {
                               setSelectedCapabilityRequirementId(value ?? null)
                               setCapabilityCoverageFilter('all')
+                              if (value !== undefined && !aiMatchResults[value]) {
+                                void loadLatestAIMatchResult(value)
+                              }
                             }}
                           />
                           <Select
