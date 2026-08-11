@@ -126,8 +126,14 @@ export default function ReviewQueue({
         </div>
         <Space wrap>
           {isAdmin && <Tag color="gold">待审核需求 {pendingRequirements.length}</Tag>}
-          <Tag color="blue">待技术确认 {technicalPendingMatches.length}</Tag>
-          {isAdmin && <Tag color="purple">待最终批准 {finalPendingMatches.length}</Tag>}
+          {isAdmin ? (
+            <>
+              <Tag color="blue">待技术确认 {technicalPendingMatches.length}</Tag>
+              <Tag color="purple">待最终批准 {finalPendingMatches.length}</Tag>
+            </>
+          ) : (
+            <Tag color="purple">待管理确认 {finalPendingMatches.length}</Tag>
+          )}
         </Space>
       </div>
 
