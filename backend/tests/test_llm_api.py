@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 from fastapi.testclient import TestClient
 import httpx
@@ -254,6 +255,25 @@ def test_structure_returns_gateway_timeout_before_proxy_deadline(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["fields"] == {"description": "客户需要节能。"}
+    assert response.json()["warnings"] == ["AI 服务响应超时，已保留原始描述，请人工补充后再应用。"]
+
+
+def test_structure_falls_back_when_real_worker_thread_is_stuck(monkeypatch):
+    monkeypatch.setenv("QWEN_API_KEY", "system-key")
+
+    def blocking_call_qwen(**_kwargs):
+        time.sleep(0.1)
+        return {"fields": {}}
+
+    monkeypatch.setattr("app.llm_service.call_qwen_for_structure", blocking_call_qwen)
+    monkeypatch.setattr(llm_api, "LLM_STRUCTURE_TOTAL_TIMEOUT_SECONDS", 0.01)
+
+    response = client.post(
+        "/api/v1/llm/structure-requirement",
+        json={"raw_text": "客户需要节能。"},
+    )
+
+    assert response.status_code == 200
     assert response.json()["warnings"] == ["AI 服务响应超时，已保留原始描述，请人工补充后再应用。"]
 
 
