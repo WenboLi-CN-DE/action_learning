@@ -11,6 +11,7 @@ import {
   Layout,
   Progress,
   Select,
+  Segmented,
   Space,
   Statistic,
   Table,
@@ -212,6 +213,7 @@ export default function WorkbenchPage() {
   const [selectedRequirementTagId, setSelectedRequirementTagId] = useState<number | null>(null)
   const [selectedCapabilityRequirementId, setSelectedCapabilityRequirementId] = useState<number | null>(null)
   const [capabilityCoverageFilter, setCapabilityCoverageFilter] = useState('all')
+  const [researchCapabilityView, setResearchCapabilityView] = useState<'matched' | 'managed'>('matched')
   const [aiMatchResults, setAIMatchResults] = useState<Record<number, AIMatchResult>>({})
   const [reviewerAssignment, setReviewerAssignment] = useState('')
   const [assigningReviewer, setAssigningReviewer] = useState(false)
@@ -349,6 +351,9 @@ export default function WorkbenchPage() {
     if (capabilityCoverageFilter === 'all') return recommendations
     return recommendations.filter((recommendation) => recommendation.coverage_status === capabilityCoverageFilter)
   }, [capabilityCoverageFilter, selectedCapabilityMatchResult])
+
+  const showCapabilityMatches = role === 'sales' || (role === 'research' && researchCapabilityView === 'matched')
+  const capabilityTableCount = showCapabilityMatches ? selectedCapabilityRecommendations.length : filteredProjects.length
 
   const loadLatestAIMatchResult = useCallback(async (requirementId: number) => {
     try {
@@ -997,7 +1002,7 @@ export default function WorkbenchPage() {
         ) : (
           <div className="metric-strip">
             <div className="metric-card">
-              <Statistic title="能力表" value={role === 'sales' ? filteredProjects.length : projects.length} />
+              <Statistic title={showCapabilityMatches ? '匹配到的能力' : '能力维护'} value={capabilityTableCount} />
             </div>
             <div className="metric-card">
               <Statistic title="需求表" value={role === 'sales' ? filteredRequirements.length : requirements.length} />
@@ -1134,7 +1139,20 @@ export default function WorkbenchPage() {
                   </section>}
                   <section className="table-panel">
                     <div className="table-toolbar">
-                      {role === 'sales' ? (
+                      {role === 'research' && (
+                        <Segmented
+                          value={researchCapabilityView}
+                          options={[
+                            { label: '匹配到的能力', value: 'matched' },
+                            { label: '能力维护', value: 'managed' },
+                          ]}
+                          onChange={(value) => {
+                            setResearchCapabilityView(value as 'matched' | 'managed')
+                            setCapabilityCoverageFilter('all')
+                          }}
+                        />
+                      )}
+                      {showCapabilityMatches ? (
                         <Space wrap>
                           <Text type="secondary">选择需求查看匹配到的能力</Text>
                           <Select
@@ -1169,7 +1187,7 @@ export default function WorkbenchPage() {
                         />
                       )}
                     </div>
-                    {role === 'sales' ? (
+                    {showCapabilityMatches ? (
                       <>
                         <div className="table-section-heading">
                           <div>
@@ -1207,7 +1225,15 @@ export default function WorkbenchPage() {
                         )}
                       </>
                     ) : (
-                      <Table rowKey="id" columns={projectColumns} dataSource={filteredProjects} loading={loading} pagination={false} scroll={{ x: 860 }} />
+                      <>
+                        <div className="table-section-heading">
+                          <div>
+                            <Title level={4}>能力维护</Title>
+                            <Text type="secondary">仅供研发维护能力资产；业务查看请切换到“匹配到的能力”。</Text>
+                          </div>
+                        </div>
+                        <Table rowKey="id" columns={projectColumns} dataSource={filteredProjects} loading={loading} pagination={false} scroll={{ x: 860 }} />
+                      </>
                     )}
                   </section>
                 </div>
