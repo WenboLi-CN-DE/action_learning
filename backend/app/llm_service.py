@@ -364,7 +364,7 @@ async def stream_qwen_for_matching(
         "按 score 降序，最多返回 5 条；低于 40 分的候选不返回。"
     )
     # 外层路由的总截止时间负责中断整体请求；这里不可更短，否则慢模型首分片会被过早放弃。
-    timeout = httpx.Timeout(timeout=60.0, connect=10.0)
+    timeout = httpx.Timeout(timeout=60.0, connect=30.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
         async with client.stream(
             "POST",
