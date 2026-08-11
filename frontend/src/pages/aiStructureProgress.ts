@@ -35,6 +35,7 @@ export function getAIStructureProgress({
 
   if (loading) {
     const waitingForModel = elapsedSeconds >= 25
+    const elapsedDescription = `已等待 ${elapsedSeconds} 秒；完成后将展示可编辑的结构化字段和建议补充项`
     return {
       current: 1,
       items: [
@@ -44,7 +45,7 @@ export function getAIStructureProgress({
           status: 'process',
           description: waitingForModel
             ? '模型响应较慢；超过上游 30 秒限制后将生成可编辑字段'
-            : '正在提取业务字段，不展示或保存模型内部思考内容',
+            : elapsedDescription,
         },
         { title: '整理结构化字段', status: 'wait' },
       ],

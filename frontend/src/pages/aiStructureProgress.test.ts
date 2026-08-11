@@ -3,7 +3,7 @@ import test from 'node:test'
 
 import { getAIStructureProgress } from './aiStructureProgress.ts'
 
-test('结构化请求展示真实的等待阶段，不伪造模型思考内容', () => {
+test('结构化请求展示真实且可理解的等待阶段', () => {
   assert.deepEqual(getAIStructureProgress({ loading: true, elapsedSeconds: 2 }), {
     current: 1,
     items: [
@@ -11,7 +11,7 @@ test('结构化请求展示真实的等待阶段，不伪造模型思考内容',
       {
         title: '正在调用 AI 模型',
         status: 'process',
-        description: '正在提取业务字段，不展示或保存模型内部思考内容',
+        description: '已等待 2 秒；完成后将展示可编辑的结构化字段和建议补充项',
       },
       { title: '整理结构化字段', status: 'wait' },
     ],
