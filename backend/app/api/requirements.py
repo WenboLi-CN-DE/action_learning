@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -29,6 +30,7 @@ router = APIRouter(prefix="/requirements", tags=["requirements"])
 PLACEHOLDER_DESCRIPTIONS = {"具体可以联系", "具体可联系", "后续联系", "待补充"}
 MAX_LLM_MATCH_CANDIDATES = 10
 AI_MATCH_TOTAL_TIMEOUT_SECONDS = 45.0
+logger = logging.getLogger(__name__)
 
 
 def validate_requirement_identity_and_description(
@@ -395,9 +397,16 @@ async def stream_requirement_matches(
                     chunks.append(content)
                     yield stream_event("content", {"text": content})
         except TimeoutError:
+            logger.warning("AI match stream total timeout: requirement_id=%s model=%s", requirement_id, model)
             yield stream_event("result", fallback_result("AI 匹配在 45 秒内未完成，未生成推荐；请稍后重试。").model_dump(mode="json"))
             return
-        except (httpx.HTTPError, ValueError):
+        except (httpx.HTTPError, ValueError) as exc:
+            logger.warning(
+                "AI match stream upstream failure: requirement_id=%s model=%s error=%s",
+                requirement_id,
+                model,
+                exc.__class__.__name__,
+            )
             yield stream_event("result", fallback_result("AI 匹配服务暂不可用，未生成推荐；请稍后重试。").model_dump(mode="json"))
             return
 
