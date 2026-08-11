@@ -64,6 +64,43 @@ def build_structure_prompt(raw_text: str, target_type: str) -> list[dict[str, st
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
+def build_structure_fallback(raw_text: str, target_type: str) -> dict[str, Any]:
+    """在模型暂不可用时保留原始描述，避免阻塞人工录入。"""
+    if target_type == "requirement":
+        missing_fields = [
+            "需求标题",
+            "客户名称",
+            "行业或业务线",
+            "业务场景",
+            "当前痛点",
+            "期望能力",
+            "紧急度",
+            "时间节点或机会阶段",
+            "提需求人或联系人",
+        ]
+        follow_up_questions = ["客户名称和联系人是什么？", "期望能力、紧急度和时间节点是什么？"]
+    else:
+        missing_fields = [
+            "能力名称",
+            "负责人",
+            "行业或业务线",
+            "适用业务场景",
+            "核心能力",
+            "成熟度或状态",
+            "可交付形式",
+            "可匹配需求类型",
+            "限制条件",
+        ]
+        follow_up_questions = ["该能力的负责人和成熟度是什么？", "适用场景、交付形式和限制条件是什么？"]
+
+    return {
+        "fields": {"description": raw_text.strip()},
+        "missing_fields": missing_fields,
+        "follow_up_questions": follow_up_questions,
+        "warnings": ["AI 服务响应超时，已保留原始描述，请人工补充后再应用。"],
+    }
+
+
 def normalize_structure_payload(payload: dict[str, Any]) -> dict[str, Any]:
     raw_fields = payload.get("fields") if isinstance(payload.get("fields"), dict) else {}
     return {

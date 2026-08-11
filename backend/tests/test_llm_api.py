@@ -182,7 +182,7 @@ def test_structure_returns_clear_error_for_invalid_model_json(monkeypatch):
     assert "system-key" not in response.text
 
 
-def test_structure_returns_clear_gateway_timeout_when_qwen_times_out(monkeypatch):
+def test_structure_returns_editable_fallback_when_qwen_times_out(monkeypatch):
     monkeypatch.setenv("QWEN_API_KEY", "system-key")
 
     def fake_call_qwen(*, raw_text, target_type, api_key, model, base_url):
@@ -196,8 +196,11 @@ def test_structure_returns_clear_gateway_timeout_when_qwen_times_out(monkeypatch
         json={"raw_text": "客户需要节能。"},
     )
 
-    assert response.status_code == 504
-    assert response.json()["detail"] == "LLM 调用超时，请稍后重试"
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["fields"] == {"description": "客户需要节能。"}
+    assert "客户名称" in payload["missing_fields"]
+    assert payload["warnings"] == ["AI 服务响应超时，已保留原始描述，请人工补充后再应用。"]
     assert "system-key" not in response.text
 
 
@@ -249,8 +252,9 @@ def test_structure_returns_gateway_timeout_before_proxy_deadline(monkeypatch):
         json={"raw_text": "客户需要节能。"},
     )
 
-    assert response.status_code == 504
-    assert response.json()["detail"] == "LLM 调用超时，请稍后重试"
+    assert response.status_code == 200
+    assert response.json()["fields"] == {"description": "客户需要节能。"}
+    assert response.json()["warnings"] == ["AI 服务响应超时，已保留原始描述，请人工补充后再应用。"]
 
 
 def test_structure_returns_sanitized_upstream_http_error(monkeypatch):

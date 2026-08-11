@@ -51,20 +51,20 @@ async def structure_text(payload: LLMStructureRequest, target_type: str) -> LLMS
             ),
             timeout=LLM_STRUCTURE_TOTAL_TIMEOUT_SECONDS,
         )
-    except TimeoutError as exc:
-        logger.warning("LLM structure timed out: target_type=%s model=%s elapsed_ms=%d", target_type, model, (time.monotonic() - started_at) * 1000)
-        raise HTTPException(status_code=504, detail="LLM 调用超时，请稍后重试") from exc
+    except TimeoutError:
+        logger.warning("LLM structure timed out; using fallback: target_type=%s model=%s elapsed_ms=%d", target_type, model, (time.monotonic() - started_at) * 1000)
+        return LLMStructureResult(**llm_service.build_structure_fallback(payload.raw_text, target_type), model=model)
     except HTTPException:
         raise
     except httpx.HTTPStatusError as exc:
         logger.warning("LLM structure upstream HTTP error: target_type=%s model=%s status=%d elapsed_ms=%d", target_type, model, exc.response.status_code, (time.monotonic() - started_at) * 1000)
         raise HTTPException(status_code=502, detail=f"LLM 调用失败：{extract_upstream_error(exc)}") from exc
-    except httpx.TimeoutException as exc:
-        logger.warning("LLM structure upstream timeout: target_type=%s model=%s elapsed_ms=%d", target_type, model, (time.monotonic() - started_at) * 1000)
-        raise HTTPException(status_code=504, detail="LLM 调用超时，请稍后重试") from exc
+    except httpx.TimeoutException:
+        logger.warning("LLM structure upstream timeout; using fallback: target_type=%s model=%s elapsed_ms=%d", target_type, model, (time.monotonic() - started_at) * 1000)
+        return LLMStructureResult(**llm_service.build_structure_fallback(payload.raw_text, target_type), model=model)
     except httpx.RequestError as exc:
-        logger.warning("LLM structure upstream request error: target_type=%s model=%s error=%s elapsed_ms=%d", target_type, model, exc.__class__.__name__, (time.monotonic() - started_at) * 1000)
-        raise HTTPException(status_code=502, detail=f"LLM 调用失败：无法连接 Qwen API（{exc.__class__.__name__}）") from exc
+        logger.warning("LLM structure upstream request error; using fallback: target_type=%s model=%s error=%s elapsed_ms=%d", target_type, model, exc.__class__.__name__, (time.monotonic() - started_at) * 1000)
+        return LLMStructureResult(**llm_service.build_structure_fallback(payload.raw_text, target_type), model=model)
     except Exception as exc:
         logger.exception("LLM structure failed: target_type=%s model=%s error=%s elapsed_ms=%d", target_type, model, exc.__class__.__name__, (time.monotonic() - started_at) * 1000)
         raise HTTPException(status_code=502, detail=f"LLM 调用失败：{exc.__class__.__name__}") from exc
