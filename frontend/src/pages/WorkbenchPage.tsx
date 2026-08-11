@@ -1011,12 +1011,6 @@ export default function WorkbenchPage() {
           </div>
         )}
 
-        <PersonalTaskCenter
-          data={pilotTasks}
-          loading={loading}
-          onOpenTask={openPilotTask}
-        />
-
         <Tabs
           className="workbench-tabs"
           activeKey={activeTab}
@@ -1425,6 +1419,12 @@ export default function WorkbenchPage() {
               ),
             },
           ].filter((item) => visibleTabKeys.includes(item.key))}
+        />
+
+        <PersonalTaskCenter
+          data={pilotTasks}
+          loading={loading}
+          onOpenTask={openPilotTask}
         />
       </Content>
 

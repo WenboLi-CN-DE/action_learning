@@ -91,10 +91,10 @@ export function PersonalTaskCenter({
   ]
 
   return (
-    <Card className="pilot-task-center" loading={loading}>
+    <Card className="pilot-task-center" loading={loading} size="small">
       <div className="pilot-section-heading">
         <div>
-          <Title level={3}>个人待办中心</Title>
+          <Title level={4}>个人待办中心</Title>
           <Text type="secondary">按责任人聚合当前需要处理的事项，并显示 SLA 风险。</Text>
         </div>
         {data && data.overdue > 0 && <Tag color="red">{data.overdue} 项已逾期</Tag>}
