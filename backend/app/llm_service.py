@@ -67,18 +67,8 @@ def build_structure_prompt(raw_text: str, target_type: str) -> list[dict[str, st
 def build_structure_fallback(raw_text: str, target_type: str) -> dict[str, Any]:
     """在模型暂不可用时保留原始描述，避免阻塞人工录入。"""
     if target_type == "requirement":
-        missing_fields = [
-            "需求标题",
-            "客户名称",
-            "行业或业务线",
-            "业务场景",
-            "当前痛点",
-            "期望能力",
-            "紧急度",
-            "时间节点或机会阶段",
-            "提需求人或联系人",
-        ]
-        follow_up_questions = ["客户名称和联系人是什么？", "期望能力、紧急度和时间节点是什么？"]
+        fields, missing_fields = build_requirement_fallback_fields(raw_text)
+        follow_up_questions = ["客户名称和联系人是什么？", "请确认期望能力、紧急度和时间节点。"]
     else:
         missing_fields = [
             "能力名称",
@@ -94,11 +84,71 @@ def build_structure_fallback(raw_text: str, target_type: str) -> dict[str, Any]:
         follow_up_questions = ["该能力的负责人和成熟度是什么？", "适用场景、交付形式和限制条件是什么？"]
 
     return {
-        "fields": {"description": raw_text.strip()},
+        "fields": fields if target_type == "requirement" else {"description": raw_text.strip()},
         "missing_fields": missing_fields,
         "follow_up_questions": follow_up_questions,
         "warnings": ["AI 服务响应超时，已保留原始描述，请人工补充后再应用。"],
     }
+
+
+def build_requirement_fallback_fields(raw_text: str) -> tuple[dict[str, str], list[str]]:
+    """只从原文中的关键词提取需求字段；无法确定的信息保持待补充。"""
+    text = raw_text.strip()
+    fields: dict[str, str] = {"description": text}
+    missing = ["customer", "contact", "timeline_or_stage"]
+
+    if any(keyword in text for keyword in ("数据中心", "机房", "PUE")):
+        fields["business_line"] = "数据中心"
+    else:
+        missing.append("business_line")
+
+    capability_parts: list[str] = []
+    if "PUE" in text:
+        capability_parts.append("PUE 优化")
+    if any(keyword in text for keyword in ("能耗", "能效", "节能")):
+        capability_parts.append("能耗分析与节能优化")
+    if "配电" in text:
+        capability_parts.append("配电系统运行监测")
+    if "制冷" in text:
+        capability_parts.append("制冷系统运行监测")
+    if "监测" in text and "运行监测" not in "、".join(capability_parts):
+        capability_parts.append("运行状态持续监测")
+    if capability_parts:
+        fields["expected_capability"] = "、".join(capability_parts)
+    else:
+        missing.append("expected_capability")
+
+    pain_parts: list[str] = []
+    if any(keyword in text for keyword in ("缺少", "没有", "不足", "缺乏")):
+        if "能耗" in text or "能效" in text:
+            pain_parts.append("缺少统一能耗分析")
+        if "监测" in text:
+            pain_parts.append("运行状态监测不足")
+    if pain_parts:
+        fields["pain_points"] = "、".join(pain_parts)
+    else:
+        missing.append("pain_points")
+
+    if "评估" in text:
+        fields["business_scenario"] = "数据中心节能评估"
+    elif capability_parts:
+        fields["business_scenario"] = "数据中心能耗优化与运行监测"
+    else:
+        missing.append("business_scenario")
+
+    if any(keyword in text for keyword in ("近期", "尽快", "马上", "紧急")):
+        fields["urgency"] = "high" if "紧急" in text or "马上" in text else "medium"
+        fields["timeline_or_stage"] = "近期"
+        missing.remove("timeline_or_stage")
+    else:
+        missing.append("urgency")
+
+    if fields.get("business_line") and capability_parts:
+        fields["title"] = "数据中心能效优化与节能评估需求"
+    else:
+        missing.append("title")
+
+    return fields, missing
 
 
 def normalize_structure_payload(payload: dict[str, Any]) -> dict[str, Any]:

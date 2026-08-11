@@ -199,8 +199,8 @@ def test_structure_returns_editable_fallback_when_qwen_times_out(monkeypatch):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["fields"] == {"description": "客户需要节能。"}
-    assert "客户名称" in payload["missing_fields"]
+    assert payload["fields"]["description"] == "客户需要节能。"
+    assert "customer" in payload["missing_fields"]
     assert payload["warnings"] == ["AI 服务响应超时，已保留原始描述，请人工补充后再应用。"]
     assert "system-key" not in response.text
 
@@ -254,8 +254,22 @@ def test_structure_returns_gateway_timeout_before_proxy_deadline(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.json()["fields"] == {"description": "客户需要节能。"}
+    assert response.json()["fields"]["description"] == "客户需要节能。"
     assert response.json()["warnings"] == ["AI 服务响应超时，已保留原始描述，请人工补充后再应用。"]
+
+
+def test_structure_fallback_extracts_verifiable_datacenter_fields():
+    result = llm_service.build_structure_fallback(
+        "某数据中心客户希望降低PUE，但目前缺少统一能耗分析，希望近期做一次节能评估，并持续监测配电与制冷系统运行状态。",
+        "requirement",
+    )
+
+    assert result["fields"]["title"] == "数据中心能效优化与节能评估需求"
+    assert result["fields"]["business_line"] == "数据中心"
+    assert result["fields"]["urgency"] == "medium"
+    assert result["fields"]["timeline_or_stage"] == "近期"
+    assert "PUE 优化" in result["fields"]["expected_capability"]
+    assert "customer" in result["missing_fields"]
 
 
 def test_structure_falls_back_when_real_worker_thread_is_stuck(monkeypatch):
