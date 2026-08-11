@@ -632,8 +632,8 @@ export default function WorkbenchPage() {
       const result = await analyzeRequirementMatchesStream(detailTarget.item.id, 5, llmSettings, (event) => {
         if (event.type === 'progress') setAIMatchProgress(event.message)
         if (event.type === 'content') {
-          setAIMatchProgress('正在生成可见的匹配结果')
-          setAIMatchPreview((current) => `${current}${event.text}`.slice(-1200))
+          setAIMatchProgress('正在整理自然语言匹配结论')
+          setAIMatchPreview('正在比较需求场景、能力范围和交付条件，完成后将展示推荐理由。')
         }
       })
       setAIMatchResult(result)
@@ -931,6 +931,7 @@ export default function WorkbenchPage() {
   const coverageLabel = (status: string) => labelOf(coverageOptions, status)
   const coverageColor = (status: string) => (status === 'covered' ? '#3dcd58' : status === 'partial' ? '#d9a300' : '#d9363e')
   const detailTypeLabel = detailTarget?.type === 'project' ? '能力详情' : '需求详情'
+  const aiMatchTitle = role === 'research' ? 'AI 需求匹配' : 'AI 能力匹配'
   const requirementDataIssues = detailTarget?.type === 'requirement'
     ? getRequirementDataIssues(detailTarget.item)
     : []
@@ -1661,10 +1662,10 @@ export default function WorkbenchPage() {
             <Card
               size="small"
               className="detail-section-card"
-              title="AI 能力匹配"
+              title={aiMatchTitle}
               extra={(
                 <Button type="primary" icon={<SearchOutlined />} loading={aiMatchLoading} onClick={runAIMatching}>
-                  分析匹配能力
+                  {aiMatchTitle}
                 </Button>
               )}
             >
@@ -1672,15 +1673,15 @@ export default function WorkbenchPage() {
                 <Space direction="vertical" size="small">
                   <Text type="secondary">
                     {role === 'research'
-                      ? 'AI 推荐用于技术评估；正式关联由管理员发起后，请在“待技术确认关联”中确认或拒绝。'
-                      : '基于需求内容分析候选能力；推荐结果仍需研发确认和管理员批准。'}
+                      ? 'AI 根据需求内容整理可能相关的能力，供研发技术确认；正式关联由管理员发起。'
+                      : 'AI 根据当前需求筛选可能匹配的能力，推荐结果仍需研发确认和管理员批准。'}
                   </Text>
                   {aiMatchLoading && (
                     <Alert
                       type="info"
                       showIcon
                       message={aiMatchProgress}
-                      description={aiMatchPreview || '不会展示或保存模型内部思考内容。'}
+                      description={aiMatchPreview || '正在理解需求背景并寻找合适的能力，请稍候。'}
                     />
                   )}
                 </Space>
@@ -1715,7 +1716,12 @@ export default function WorkbenchPage() {
                           <Text type="secondary">能力缺口：{recommendation.gaps.join('；')}</Text>
                         )}
                         <Text type="secondary">
-                          维度评分：{Object.entries(recommendation.dimensions).map(([key, value]) => `${key} ${value}`).join(' / ')}
+                          匹配依据：{[
+                            ['内容相关性', recommendation.dimensions.semantic],
+                            ['行业场景', recommendation.dimensions.industry],
+                            ['应用场景', recommendation.dimensions.scenario],
+                            ['交付可行性', recommendation.dimensions.delivery],
+                          ].filter(([, value]) => typeof value === 'number').map(([label, value]) => `${label} ${value} 分`).join(' / ')}
                         </Text>
                       </Space>
                     </Card>
@@ -1731,7 +1737,7 @@ export default function WorkbenchPage() {
                       description="这些是 AI 候选能力。管理员发起正式关联后，研发可在“待技术确认关联”中补充技术意见并完成确认。"
                     />
                   )}
-                  <Text type="secondary">模型：{aiMatchResult.model}</Text>
+                  <Text type="secondary">以上内容由平台根据当前需求和能力资料整理，最终结果以人工确认记录为准。</Text>
                 </Space>
               )}
             </Card>
