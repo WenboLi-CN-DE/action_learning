@@ -1126,7 +1126,7 @@ export default function WorkbenchPage() {
                     <div className="table-toolbar">
                       {role === 'sales' ? (
                         <Space wrap>
-                          <Text type="secondary">选择需求查看该需求的 AI 匹配能力</Text>
+                          <Text type="secondary">选择需求查看匹配到的能力</Text>
                           <Select
                             className="table-filter"
                             allowClear
@@ -1160,11 +1160,11 @@ export default function WorkbenchPage() {
                       <>
                         <div className="table-section-heading">
                           <div>
-                            <Title level={4}>契合的能力表</Title>
+                            <Title level={4}>匹配到的能力</Title>
                             <Text type="secondary">
                               {selectedCapabilityRequirement
-                                ? `当前需求：${selectedCapabilityRequirement.title}；AI 推荐仅供参考，正式关联仍需研发确认。`
-                                : '请先选择一条需求，再查看该需求的 AI 匹配能力。'}
+                                ? `当前需求：${selectedCapabilityRequirement.title}；AI 推荐仅供参考，正式关联待管理确认。`
+                                : '请先选择一条需求，再查看匹配到的能力。'}
                             </Text>
                           </div>
                           {selectedCapabilityMatchResult && (
@@ -1172,7 +1172,7 @@ export default function WorkbenchPage() {
                           )}
                         </div>
                         {!selectedCapabilityRequirement && (
-                          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择需求后查看匹配能力" />
+                          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择需求后查看匹配到的能力" />
                         )}
                         {selectedCapabilityRequirement && !selectedCapabilityMatchResult && (
                           <Empty
