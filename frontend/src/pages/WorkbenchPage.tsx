@@ -112,6 +112,13 @@ const projectStatusOptions = [
   { label: '暂停', value: 'paused' },
 ]
 
+const projectStatusColors: Record<string, string> = {
+  researching: 'blue',
+  demo_ready: 'cyan',
+  delivered: 'green',
+  paused: 'default',
+}
+
 const requirementStatusOptions = [
   { label: '草稿', value: 'draft' },
   { label: '待审核', value: 'pending_review' },
@@ -767,7 +774,11 @@ export default function WorkbenchPage() {
       dataIndex: 'status',
       key: 'status',
       width: 110,
-      render: (value: string) => <AntTag>{labelOf(projectStatusOptions, value)}</AntTag>,
+      render: (value: string) => (
+        <AntTag color={projectStatusColors[value] ?? 'default'}>
+          {labelOf(projectStatusOptions, value)}
+        </AntTag>
+      ),
     },
     { title: '标签', dataIndex: 'tags', key: 'tags', render: renderTags },
     { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
@@ -955,7 +966,7 @@ export default function WorkbenchPage() {
           <div className="brand-divider" />
           <div className="brand-copy">
             <Title level={2}>AI工坊平台</Title>
-            <Text>前端需求与后端预研项目透明汇总</Text>
+            <Text>软件前端需求与后端预研项目透明汇总</Text>
           </div>
         </div>
         <Space className="header-actions">
