@@ -209,6 +209,9 @@ export default function WorkbenchPage() {
   const [selectedDashboardTagId, setSelectedDashboardTagId] = useState<number | null>(null)
   const [selectedProjectTagId, setSelectedProjectTagId] = useState<number | null>(null)
   const [selectedRequirementTagId, setSelectedRequirementTagId] = useState<number | null>(null)
+  const [selectedCapabilityRequirementId, setSelectedCapabilityRequirementId] = useState<number | null>(null)
+  const [capabilityCoverageFilter, setCapabilityCoverageFilter] = useState('all')
+  const [aiMatchResults, setAIMatchResults] = useState<Record<number, AIMatchResult>>({})
   const [reviewerAssignment, setReviewerAssignment] = useState('')
   const [assigningReviewer, setAssigningReviewer] = useState(false)
   const [llmSettingsOpen, setLLMSettingsOpen] = useState(false)
@@ -330,6 +333,21 @@ export default function WorkbenchPage() {
     }
     return matches.filter((match) => match.requirement_id === detailTarget.item.id)
   }, [detailTarget, matches])
+
+  const selectedCapabilityRequirement = useMemo(
+    () => requirements.find((requirement) => requirement.id === selectedCapabilityRequirementId) ?? null,
+    [requirements, selectedCapabilityRequirementId],
+  )
+
+  const selectedCapabilityMatchResult = selectedCapabilityRequirementId === null
+    ? null
+    : aiMatchResults[selectedCapabilityRequirementId] ?? null
+
+  const selectedCapabilityRecommendations = useMemo(() => {
+    const recommendations = selectedCapabilityMatchResult?.recommendations ?? []
+    if (capabilityCoverageFilter === 'all') return recommendations
+    return recommendations.filter((recommendation) => recommendation.coverage_status === capabilityCoverageFilter)
+  }, [capabilityCoverageFilter, selectedCapabilityMatchResult])
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -520,7 +538,8 @@ export default function WorkbenchPage() {
 
   async function openDetail(target: DetailTarget) {
     setDetailTarget(target)
-    setAIMatchResult(null)
+    setAIMatchResult(target.type === 'requirement' ? aiMatchResults[target.item.id] ?? null : null)
+    if (target.type === 'requirement') setSelectedCapabilityRequirementId(target.item.id)
     setReviewEvents([])
     setReviewerAssignment(
       target.type === 'requirement'
@@ -597,6 +616,7 @@ export default function WorkbenchPage() {
         }
       })
       setAIMatchResult(result)
+      setAIMatchResults((current) => ({ ...current, [detailTarget.item.id]: result }))
       if (result.fallback_used) messageApi.warning(result.warnings[0] ?? 'AI 匹配未完成')
       else if (result.recommendations.length === 0) messageApi.info('AI 未发现达到阈值的候选能力')
     } catch (err) {
@@ -642,6 +662,19 @@ export default function WorkbenchPage() {
         item.project_id === recommendation.project_id ? { ...item, already_confirmed: true } : item,
       ),
     } : current)
+    setAIMatchResults((current) => {
+      const result = current[detailTarget.item.id]
+      if (!result) return current
+      return {
+        ...current,
+        [detailTarget.item.id]: {
+          ...result,
+          recommendations: result.recommendations.map((item) =>
+            item.project_id === recommendation.project_id ? { ...item, already_confirmed: true } : item,
+          ),
+        },
+      }
+    })
     await loadData()
     messageApi.success('AI 推荐关联已发起，等待研发技术确认')
   }
@@ -816,6 +849,62 @@ export default function WorkbenchPage() {
         : '-',
     },
     { title: '备注', dataIndex: 'note', key: 'note', ellipsis: true },
+  ]
+
+  const aiCapabilityColumns: ColumnsType<AIMatchResult['recommendations'][number]> = [
+    {
+      title: '能力',
+      key: 'project',
+      width: 240,
+      render: (_, recommendation) => (
+        <Space direction="vertical" size={2}>
+          <Text strong>{recommendation.project.name}</Text>
+          {renderTags(recommendation.project.tags)}
+        </Space>
+      ),
+    },
+    { title: '负责人', dataIndex: ['project', 'owner'], key: 'owner', width: 150 },
+    {
+      title: '匹配分类',
+      dataIndex: 'coverage_status',
+      key: 'coverage_status',
+      width: 120,
+      render: (value: string) => (
+        <AntTag color={value === 'covered' ? 'green' : value === 'partial' ? 'gold' : 'red'}>
+          {coverageLabel(value)}
+        </AntTag>
+      ),
+    },
+    {
+      title: '匹配分',
+      dataIndex: 'score',
+      key: 'score',
+      width: 90,
+      render: (value: number) => <Text strong>{value.toFixed(0)} 分</Text>,
+    },
+    {
+      title: '匹配说明',
+      key: 'reason',
+      width: 420,
+      render: (_, recommendation) => (
+        <Space direction="vertical" size={2}>
+          <Text>{recommendation.reason}</Text>
+          {recommendation.gaps.length > 0 && (
+            <Text type="secondary">能力缺口：{recommendation.gaps.join('；')}</Text>
+          )}
+        </Space>
+      ),
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 100,
+      render: (_, recommendation) => (
+        <Button type="link" icon={<EyeOutlined />} onClick={() => void openDetail({ type: 'project', item: recommendation.project })}>
+          详情
+        </Button>
+      ),
+    },
   ]
 
   const coverageLabel = (status: string) => labelOf(coverageOptions, status)
@@ -1035,17 +1124,78 @@ export default function WorkbenchPage() {
                   </section>}
                   <section className="table-panel">
                     <div className="table-toolbar">
-                      {role === 'sales' && <Text type="secondary">仅展示可演示或已交付的能力</Text>}
-                      <Select
-                        className="table-filter"
-                        allowClear
-                        placeholder="按标签筛选能力"
-                        options={tagOptions}
-                        value={selectedProjectTagId ?? undefined}
-                        onChange={(value?: number) => setSelectedProjectTagId(value ?? null)}
-                      />
+                      {role === 'sales' ? (
+                        <Space wrap>
+                          <Text type="secondary">选择需求查看该需求的 AI 匹配能力</Text>
+                          <Select
+                            className="table-filter"
+                            allowClear
+                            placeholder="选择需求"
+                            options={filteredRequirements.map((requirement) => ({ label: requirement.title, value: requirement.id }))}
+                            value={selectedCapabilityRequirementId ?? undefined}
+                            onChange={(value?: number) => {
+                              setSelectedCapabilityRequirementId(value ?? null)
+                              setCapabilityCoverageFilter('all')
+                            }}
+                          />
+                          <Select
+                            className="table-filter"
+                            value={capabilityCoverageFilter}
+                            options={[{ label: '全部匹配结果', value: 'all' }, ...coverageOptions]}
+                            onChange={setCapabilityCoverageFilter}
+                          />
+                        </Space>
+                      ) : (
+                        <Select
+                          className="table-filter"
+                          allowClear
+                          placeholder="按标签筛选能力"
+                          options={tagOptions}
+                          value={selectedProjectTagId ?? undefined}
+                          onChange={(value?: number) => setSelectedProjectTagId(value ?? null)}
+                        />
+                      )}
                     </div>
-                    <Table rowKey="id" columns={projectColumns} dataSource={filteredProjects} loading={loading} pagination={false} scroll={{ x: 860 }} />
+                    {role === 'sales' ? (
+                      <>
+                        <div className="table-section-heading">
+                          <div>
+                            <Title level={4}>契合的能力表</Title>
+                            <Text type="secondary">
+                              {selectedCapabilityRequirement
+                                ? `当前需求：${selectedCapabilityRequirement.title}；AI 推荐仅供参考，正式关联仍需研发确认。`
+                                : '请先选择一条需求，再查看该需求的 AI 匹配能力。'}
+                            </Text>
+                          </div>
+                          {selectedCapabilityMatchResult && (
+                            <AntTag color="blue">{selectedCapabilityMatchResult.model}</AntTag>
+                          )}
+                        </div>
+                        {!selectedCapabilityRequirement && (
+                          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择需求后查看匹配能力" />
+                        )}
+                        {selectedCapabilityRequirement && !selectedCapabilityMatchResult && (
+                          <Empty
+                            image={Empty.PRESENTED_IMAGE_SIMPLE}
+                            description="该需求尚未完成 AI 匹配，请在需求详情中点击“分析匹配能力”"
+                          />
+                        )}
+                        {selectedCapabilityMatchResult && selectedCapabilityMatchResult.recommendations.length === 0 && (
+                          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未发现达到阈值的候选能力" />
+                        )}
+                        {selectedCapabilityMatchResult && selectedCapabilityMatchResult.recommendations.length > 0 && (
+                          <Table
+                            rowKey="project_id"
+                            columns={aiCapabilityColumns}
+                            dataSource={selectedCapabilityRecommendations}
+                            pagination={false}
+                            scroll={{ x: 1120 }}
+                          />
+                        )}
+                      </>
+                    ) : (
+                      <Table rowKey="id" columns={projectColumns} dataSource={filteredProjects} loading={loading} pagination={false} scroll={{ x: 860 }} />
+                    )}
                   </section>
                 </div>
               ),
@@ -1131,6 +1281,18 @@ export default function WorkbenchPage() {
                               actions={[
                                 <Button key="details" type="link" icon={<EyeOutlined />} onClick={() => openDetail({ type: 'requirement', item: requirement })}>
                                   查看详情
+                                </Button>,
+                                <Button
+                                  key="capabilities"
+                                  type="link"
+                                  icon={<SearchOutlined />}
+                                  onClick={() => {
+                                    setSelectedCapabilityRequirementId(requirement.id)
+                                    setCapabilityCoverageFilter('all')
+                                    setActiveTab('projects')
+                                  }}
+                                >
+                                  查看匹配能力
                                 </Button>,
                                 <Button key="edit" type="link" icon={<EditOutlined />} onClick={() => openRequirementEditor(requirement)}>
                                   编辑需求

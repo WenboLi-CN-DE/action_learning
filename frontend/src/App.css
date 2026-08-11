@@ -730,8 +730,34 @@
   background: #fbfdfb;
 }
 
+.table-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #edf2ee;
+  background: #ffffff;
+}
+
+.table-section-heading .ant-typography {
+  display: block;
+  margin: 0;
+}
+
+.table-section-heading h4.ant-typography {
+  margin-bottom: 4px;
+  color: #0a2f24;
+}
+
 .table-filter {
   width: min(280px, 100%);
+}
+
+@media (max-width: 760px) {
+  .table-section-heading {
+    flex-direction: column;
+  }
 }
 
 .table-panel.compact {
