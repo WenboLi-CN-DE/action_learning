@@ -11,7 +11,6 @@ import {
   Layout,
   Progress,
   Select,
-  Segmented,
   Space,
   Statistic,
   Table,
@@ -93,6 +92,7 @@ import {
 } from './requirementDetail'
 import {
   getRoleCapabilities,
+  getRoleTabOrder,
   isSalesOwnRequirement,
   isSalesVisibleProjectStatus,
   ROLE_LABELS,
@@ -214,7 +214,6 @@ export default function WorkbenchPage() {
   const [selectedRequirementTagId, setSelectedRequirementTagId] = useState<number | null>(null)
   const [selectedCapabilityRequirementId, setSelectedCapabilityRequirementId] = useState<number | null>(null)
   const [capabilityCoverageFilter, setCapabilityCoverageFilter] = useState('all')
-  const [researchCapabilityView, setResearchCapabilityView] = useState<'matched' | 'managed'>('matched')
   const [aiMatchResults, setAIMatchResults] = useState<Record<number, AIMatchResult>>({})
   const [reviewerAssignment, setReviewerAssignment] = useState('')
   const [assigningReviewer, setAssigningReviewer] = useState(false)
@@ -353,7 +352,7 @@ export default function WorkbenchPage() {
     return recommendations.filter((recommendation) => recommendation.coverage_status === capabilityCoverageFilter)
   }, [capabilityCoverageFilter, selectedCapabilityMatchResult])
 
-  const showCapabilityMatches = role === 'sales' || (role === 'research' && researchCapabilityView === 'matched')
+  const showCapabilityMatches = role === 'sales'
   const capabilityTableCount = showCapabilityMatches ? selectedCapabilityRecommendations.length : filteredProjects.length
 
   const loadLatestAIMatchResult = useCallback(async (requirementId: number) => {
@@ -943,11 +942,7 @@ export default function WorkbenchPage() {
   const requirementReview = detailTarget?.type === 'requirement'
     ? getRequirementReviewPresentation(detailTarget.item)
     : null
-  const visibleTabKeys = role === 'admin'
-    ? ['dashboard', 'projects', 'requirements', 'reviews', 'tags', 'matches']
-    : role === 'research'
-      ? ['projects', 'requirements']
-      : ['projects', 'requirements']
+  const visibleTabKeys: string[] = getRoleTabOrder(role)
 
   return (
     <Layout className="app-shell">
@@ -1008,7 +1003,7 @@ export default function WorkbenchPage() {
         ) : (
           <div className="metric-strip">
             <div className="metric-card">
-              <Statistic title={showCapabilityMatches ? '匹配到的能力' : '能力维护'} value={capabilityTableCount} />
+              <Statistic title={showCapabilityMatches ? '匹配到的能力' : '能力表'} value={capabilityTableCount} />
             </div>
             <div className="metric-card">
               <Statistic title="需求表" value={role === 'sales' ? filteredRequirements.length : requirements.length} />
@@ -1145,19 +1140,6 @@ export default function WorkbenchPage() {
                   </section>}
                   <section className="table-panel">
                     <div className="table-toolbar">
-                      {role === 'research' && (
-                        <Segmented
-                          value={researchCapabilityView}
-                          options={[
-                            { label: '匹配到的能力', value: 'matched' },
-                            { label: '能力维护', value: 'managed' },
-                          ]}
-                          onChange={(value) => {
-                            setResearchCapabilityView(value as 'matched' | 'managed')
-                            setCapabilityCoverageFilter('all')
-                          }}
-                        />
-                      )}
                       {showCapabilityMatches ? (
                         <Space wrap>
                           <Text type="secondary">选择需求查看匹配到的能力</Text>
@@ -1235,7 +1217,7 @@ export default function WorkbenchPage() {
                         <div className="table-section-heading">
                           <div>
                             <Title level={4}>能力维护</Title>
-                            <Text type="secondary">仅供研发维护能力资产；业务查看请切换到“匹配到的能力”。</Text>
+                            <Text type="secondary">维护可复用的技术能力；匹配到的客户需求请前往“匹配到的需求”。</Text>
                           </div>
                         </div>
                         <Table rowKey="id" columns={projectColumns} dataSource={filteredProjects} loading={loading} pagination={false} scroll={{ x: 860 }} />
@@ -1453,7 +1435,9 @@ export default function WorkbenchPage() {
                 </div>
               ),
             },
-          ].filter((item) => visibleTabKeys.includes(item.key))}
+          ]
+            .filter((item) => visibleTabKeys.includes(item.key))
+            .sort((left, right) => visibleTabKeys.indexOf(left.key) - visibleTabKeys.indexOf(right.key))}
         />
 
         <PersonalTaskCenter

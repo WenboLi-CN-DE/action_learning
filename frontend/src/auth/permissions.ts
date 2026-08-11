@@ -1,7 +1,8 @@
 export type RoleId = 'sales' | 'research' | 'admin'
+export type WorkbenchTabId = 'dashboard' | 'projects' | 'requirements' | 'reviews' | 'tags' | 'matches'
 
 export interface RoleCapabilities {
-  defaultTab: 'dashboard' | 'projects' | 'requirements' | 'reviews'
+  defaultTab: WorkbenchTabId
   canCreateRequirement: boolean
   canEditRequirement: boolean
   canManageProjects: boolean
@@ -13,7 +14,7 @@ export interface RoleCapabilities {
 
 const CAPABILITIES: Record<RoleId, RoleCapabilities> = {
   sales: {
-    defaultTab: 'projects',
+    defaultTab: 'requirements',
     canCreateRequirement: true,
     canEditRequirement: true,
     canManageProjects: false,
@@ -44,6 +45,12 @@ const CAPABILITIES: Record<RoleId, RoleCapabilities> = {
   },
 }
 
+const ROLE_TAB_ORDER: Record<RoleId, WorkbenchTabId[]> = {
+  sales: ['requirements', 'projects'],
+  research: ['projects', 'requirements'],
+  admin: ['dashboard', 'projects', 'requirements', 'reviews', 'tags', 'matches'],
+}
+
 const SALES_VISIBLE_PROJECT_STATUSES = new Set(['demo_ready', 'delivered'])
 
 export function isSalesVisibleProjectStatus(status: string) {
@@ -66,4 +73,8 @@ export function isRoleId(value: unknown): value is RoleId {
 
 export function getRoleCapabilities(role: RoleId): RoleCapabilities {
   return CAPABILITIES[role]
+}
+
+export function getRoleTabOrder(role: RoleId): WorkbenchTabId[] {
+  return ROLE_TAB_ORDER[role]
 }

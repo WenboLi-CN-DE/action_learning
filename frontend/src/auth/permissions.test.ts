@@ -3,16 +3,18 @@ import test from 'node:test'
 
 import {
   getRoleCapabilities,
+  getRoleTabOrder,
   isRoleId,
   isSalesOwnRequirement,
   isSalesVisibleProjectStatus,
 } from './permissions.ts'
 
 
-test('销售以能力表为主，只能维护需求', () => {
+test('销售以需求表为默认入口，只能维护需求', () => {
   const capabilities = getRoleCapabilities('sales')
 
-  assert.equal(capabilities.defaultTab, 'projects')
+  assert.equal(capabilities.defaultTab, 'requirements')
+  assert.deepEqual(getRoleTabOrder('sales'), ['requirements', 'projects'])
   assert.equal(capabilities.canCreateRequirement, true)
   assert.equal(capabilities.canEditRequirement, true)
   assert.equal(capabilities.canManageProjects, false)
@@ -22,8 +24,8 @@ test('销售以能力表为主，只能维护需求', () => {
   assert.equal(capabilities.canManageKnowledge, false)
 })
 
-test('销售优先浏览已可对外展示的能力', () => {
-  assert.equal(getRoleCapabilities('sales').defaultTab, 'projects')
+test('销售可从需求查看已对外展示的匹配能力', () => {
+  assert.equal(getRoleCapabilities('sales').defaultTab, 'requirements')
   assert.equal(isSalesVisibleProjectStatus('demo_ready'), true)
   assert.equal(isSalesVisibleProjectStatus('delivered'), true)
   assert.equal(isSalesVisibleProjectStatus('researching'), false)
@@ -41,6 +43,7 @@ test('研发以能力表为主，可以维护能力并确认匹配', () => {
   const capabilities = getRoleCapabilities('research')
 
   assert.equal(capabilities.defaultTab, 'projects')
+  assert.deepEqual(getRoleTabOrder('research'), ['projects', 'requirements'])
   assert.equal(capabilities.canCreateRequirement, false)
   assert.equal(capabilities.canEditRequirement, false)
   assert.equal(capabilities.canManageProjects, true)
