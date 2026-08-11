@@ -141,6 +141,15 @@ def test_ai_matching_ranks_candidates_and_can_be_confirmed(monkeypatch):
     assert persisted.status_code == 200
     assert persisted.json()["recommendations"][0]["project_id"] == relevant["id"]
 
+    restored_after_refresh = client.get("/api/v1/requirements/ai-match-results/latest")
+    assert restored_after_refresh.status_code == 200
+    restored_by_requirement = {
+        item["requirement_id"]: item for item in restored_after_refresh.json()
+    }
+    assert restored_by_requirement[requirement["id"]]["recommendations"][0][
+        "project_id"
+    ] == relevant["id"]
+
     recommendation = result["recommendations"][0]
     confirmed = client.post(
         "/api/v1/matches",

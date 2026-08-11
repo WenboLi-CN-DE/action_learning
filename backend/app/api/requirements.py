@@ -538,6 +538,28 @@ def get_latest_requirement_matches(
     return load_latest_ai_match_result(session, requirement_id, projects)
 
 
+@router.get("/ai-match-results/latest", response_model=list[AIMatchResult])
+def get_latest_ai_match_results(session: Session = Depends(get_session)):
+    """批量恢复每条需求最近一次成功的 AI 匹配结果。"""
+    projects = list(session.exec(select(Project)).all())
+    runs = session.exec(
+        select(RequirementAIMatchRun).order_by(RequirementAIMatchRun.created_at.desc())
+    ).all()
+    latest_requirement_ids: list[int] = []
+    seen_requirement_ids: set[int] = set()
+    for run in runs:
+        if run.requirement_id in seen_requirement_ids:
+            continue
+        seen_requirement_ids.add(run.requirement_id)
+        latest_requirement_ids.append(run.requirement_id)
+    return [
+        result
+        for requirement_id in latest_requirement_ids
+        if (result := load_latest_ai_match_result(session, requirement_id, projects))
+        is not None
+    ]
+
+
 @router.get("/{requirement_id}", response_model=RequirementRead)
 def get_requirement(requirement_id: int, session: Session = Depends(get_session)):
     requirement = session.get(Requirement, requirement_id)

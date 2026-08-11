@@ -33,6 +33,7 @@ import {
   fetchComments,
   fetchLLMStatus,
   fetchLatestRequirementMatches,
+  fetchLatestRequirementMatchResults,
   fetchMatches,
   fetchPilotMetrics,
   fetchPilotTasks,
@@ -369,13 +370,14 @@ export default function WorkbenchPage() {
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const [projectData, requirementData, tagData, matchData, taskData, metricsData] = await Promise.all([
+      const [projectData, requirementData, tagData, matchData, taskData, metricsData, latestMatchResults] = await Promise.all([
         fetchProjects(),
         fetchRequirements(),
         fetchTags(),
         fetchMatches(),
         fetchPilotTasks(role, displayName),
         role === 'admin' ? fetchPilotMetrics() : Promise.resolve(null),
+        fetchLatestRequirementMatchResults().catch(() => []),
       ])
       setProjects(projectData)
       setRequirements(requirementData)
@@ -383,6 +385,9 @@ export default function WorkbenchPage() {
       setMatches(matchData)
       setPilotTasks(taskData)
       setPilotMetrics(metricsData)
+      setAIMatchResults(Object.fromEntries(
+        latestMatchResults.map((result) => [result.requirement_id, result]),
+      ))
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : '数据加载失败')
@@ -1339,6 +1344,9 @@ export default function WorkbenchPage() {
                                     setSelectedCapabilityRequirementId(requirement.id)
                                     setCapabilityCoverageFilter('all')
                                     setActiveTab('projects')
+                                    if (!aiMatchResults[requirement.id]) {
+                                      void loadLatestAIMatchResult(requirement.id)
+                                    }
                                   }}
                                 >
                                   查看匹配能力
