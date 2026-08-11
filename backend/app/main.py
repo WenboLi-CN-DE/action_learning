@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import APIRouter
+from sqlmodel import Session
 from app.api.comments import router as comments_router
 from app.api.chat import router as chat_router
 from app.api.health import router as health_router
@@ -12,9 +13,12 @@ from app.api.rag import router as rag_router
 from app.api.requirements import router as requirements_router
 from app.api.reviews import router as reviews_router
 from app.api.tags import router as tags_router
-from app.database import create_db_and_tables
+from app.database import create_db_and_tables, engine
+from app.rag.sync import rebuild_index_from_database
+import logging
 
 app = FastAPI(title="AI工坊平台", version="0.1.0")
+logger = logging.getLogger(__name__)
 
 # CORS 配置 — 允许 Vite dev server 跨域
 app.add_middleware(
@@ -46,3 +50,13 @@ create_db_and_tables()
 @app.on_event("startup")
 def on_startup():
     create_db_and_tables()
+    try:
+        with Session(engine) as session:
+            document_count, chunk_count = rebuild_index_from_database(session)
+        logger.info(
+            "RAG startup rebuild complete: documents=%s chunks=%s",
+            document_count,
+            chunk_count,
+        )
+    except Exception:
+        logger.exception("RAG startup rebuild failed")

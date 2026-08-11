@@ -3,8 +3,11 @@ import os
 os.environ["RAG_BACKEND"] = "memory"
 
 from fastapi.testclient import TestClient
+from sqlmodel import Session
 
-from app.main import app
+from app.database import engine
+from app.main import app, on_startup
+from app.models import Project
 from app.rag.service import MemoryBackend, set_backend
 
 
@@ -74,6 +77,32 @@ def test_admin_can_rebuild_index_from_database_records():
     assert retrieval.status_code == 200
     assert any(
         item["title"] == "配电巡检说明"
+        for item in retrieval.json()["chunks"]
+    )
+
+
+def test_startup_rebuilds_capability_index_from_database_records():
+    with Session(engine) as session:
+        session.add(
+            Project(
+                name="数据中心能效诊断能力",
+                description="提供数据中心负载分析、制冷优化和节能评估。",
+                owner="数据中心解决方案团队",
+                status="demo_ready",
+            )
+        )
+        session.commit()
+    set_backend(MemoryBackend())
+
+    on_startup()
+
+    retrieval = client.post(
+        "/api/v1/rag/retrieve",
+        json={"query": "数据中心能效", "top_k": 5, "filters": {"source_type": "project"}},
+    )
+    assert retrieval.status_code == 200
+    assert any(
+        item["title"] == "数据中心能效诊断能力"
         for item in retrieval.json()["chunks"]
     )
 
